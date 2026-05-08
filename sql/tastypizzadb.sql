@@ -6,6 +6,7 @@ USE tastypizza;
 CREATE TABLE users (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     email VARCHAR(100) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
     first_name VARCHAR(50)  NOT NULL,
     last_name VARCHAR(50)  NOT NULL,
     phone VARCHAR(20),
@@ -13,7 +14,6 @@ CREATE TABLE users (
     date_of_birth DATE NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-
 
 CREATE TABLE addresses (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
