@@ -6,19 +6,19 @@ import java.sql.SQLException;
 
 public class DatabaseConnection {
 
-    private static final String url = "jdbc:mysql://localhost:3306/pizza";
+    private static final String url = "jdbc:mysql://localhost:3306/tastypizza";
     private static final String user = "root";
     private static final String password = "SanDwitch8";
 
     private static DatabaseConnection instance;
     private final Connection connection;
 
-    public DatabaseConnection() throws SQLException {
+    private DatabaseConnection() throws SQLException {
         this.connection = DriverManager.getConnection(url, user, password);
     }
 
     public static DatabaseConnection getInstance() throws SQLException {
-        if (instance == null || !instance.connection.isClosed()) {
+        if (instance == null || instance.connection.isClosed()) {
             instance = new DatabaseConnection();
         }
         return instance;
