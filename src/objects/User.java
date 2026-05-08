@@ -1,0 +1,129 @@
+package objects;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.Period;
+import java.util.Objects;
+
+public class User {
+    private final Long id;
+    private final String email;
+    private final String passwordHash;
+    private final String firstName;
+    private final String lastName;
+    private final String phoneNumber;
+    private final Role role;
+    private final LocalDate dateOfBirth;
+    private final LocalDateTime createdAt;
+
+    public User(Builder builder) {
+        this.id = builder.id;
+        this.email = builder.email;
+        this.passwordHash = builder.passwordHash;
+        this.firstName = builder.firstName;
+        this.lastName = builder.lastName;
+        this.phoneNumber = builder.phoneNumber;
+        this.role = builder.role;
+        this.dateOfBirth = builder.dateOfBirth;
+        this.createdAt = builder.createdAt;
+    }
+
+    public static Builder builder(){
+        return new Builder();
+    }
+
+    public Long getId() { return id; }
+    public String getEmail() { return email; }
+    public String getPasswordHash() { return passwordHash; }
+    public String getFirstName() { return firstName; }
+    public String getLastName() { return lastName; }
+    public String getPhoneNumber() { return phoneNumber; }
+    public Role getRole() { return role; }
+    public LocalDate getDateOfBirth() { return dateOfBirth; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+
+    public String getFullName() {
+        return firstName + " " + lastName;
+    }
+
+    public int getAge(){
+        return Period.between(this.dateOfBirth, LocalDate.now()).getYears();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof User user)) return false;
+        return Objects.equals(email, user.email);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(email);
+    }
+
+    @Override
+    public String toString() {
+        return  String.format("User[id: %d, email: '%s', name: '%s', role: %s, age: %d]", id, email, getFullName(), role, getAge());
+    }
+
+
+    public static class Builder {
+        private Long id;
+        private String email;
+        private String passwordHash;
+        private String firstName;
+        private String lastName;
+        private String phoneNumber;
+        private Role role;
+        private LocalDate dateOfBirth;
+        private LocalDateTime createdAt;
+
+        public Builder id(Long id) {
+            this.id = id;
+            return this;
+        }
+        public Builder email(String email) {
+            this.email = email;
+            return this;
+        }
+        public Builder passwordHash(String passwordHash) {
+            this.passwordHash = passwordHash;
+            return this;
+        }
+        public Builder firstName(String firstName) {
+            this.firstName = firstName;
+            return this;
+        }
+        public Builder lastName(String lastName) {
+            this.lastName = lastName;
+            return this;
+        }
+        public Builder phoneNumber(String phoneNumber) {
+            this.phoneNumber = phoneNumber;
+            return this;
+        }
+        public Builder role(Role role) {
+            this.role = role;
+            return this;
+        }
+        public Builder dateOfBirth(LocalDate dateOfBirth) {
+            this.dateOfBirth = dateOfBirth;
+            return this;
+        }
+        public Builder createdAt(LocalDateTime createdAt) {
+            this.createdAt = createdAt;
+            return this;
+        }
+
+        public User build() {
+            Objects.requireNonNull(email, "Email is required!");
+            Objects.requireNonNull(passwordHash, "Password hash is required!");
+            Objects.requireNonNull(firstName, "First name is required!");
+            Objects.requireNonNull(lastName, "Last name is required!");
+            Objects.requireNonNull(role, "Role is required!");
+            Objects.requireNonNull(dateOfBirth, "Date of birth is required!");
+            return new User(this);
+        }
+    }
+}
