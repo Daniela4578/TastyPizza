@@ -1,0 +1,128 @@
+package services;
+
+import objects.Role;
+import objects.User;
+import repositories.UserRepository;
+import utilitis.PasswordHasher;
+
+import java.security.NoSuchAlgorithmException;
+import java.time.LocalDate;
+import java.time.Period;
+import java.util.Optional;
+import java.util.regex.Pattern;
+
+public class UserService {
+
+    private final UserRepository userRepository;
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    private static final Pattern PHONE_PATTERN = Pattern.compile("^\\+?[0-9]{7,15}$");
+
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    public User login(String email, String password) throws NoSuchAlgorithmException {
+
+        validateEmail(email);
+        validatePassword(password);
+
+        Optional<User> result = userRepository.findByEmail(email);
+
+        if(result.isEmpty()) {
+            throw new IllegalArgumentException("Invalid email/password");
+        }
+
+        User user = result.get();
+
+        if(!PasswordHasher.verify(password,user.getPasswordHash())){
+            throw new IllegalArgumentException("Invalid email/password");
+        }
+
+        return user;
+    }
+
+    public User register(String email, String password, String firstName, String lastName, String phoneNumber, LocalDate dateOfBirth, Role role) throws NoSuchAlgorithmException {
+        validateEmail(email);
+        validatePassword(password);
+        validateName(firstName);
+        validateName(lastName);
+        validatePhoneNumber(phoneNumber);
+        validateAge(role,dateOfBirth);
+
+        if(userRepository.findByEmail(email).isPresent()) {
+            throw new IllegalArgumentException("User already exists");
+        }
+
+        String passwordHash = PasswordHasher.hash(password);
+
+        User newUser = User.builder()
+                .email(email)
+                .passwordHash(passwordHash)
+                .firstName(firstName)
+                .lastName(lastName)
+                .phoneNumber(phoneNumber)
+                .role(role)
+                .dateOfBirth(dateOfBirth)
+                .build();
+
+        return userRepository.save(newUser);
+    }
+
+    private void validateEmail(String email) {
+        if(email == null || email.isEmpty()) {
+            throw new IllegalArgumentException("Email is required");
+        }
+        if(!EMAIL_PATTERN.matcher(email).matches()) {
+            throw new IllegalArgumentException("Invalid email format");
+        }
+    }
+
+    private void validatePassword(String password) {
+        if(password == null || password.isEmpty()) {
+            throw new IllegalArgumentException("Password is required");
+        }
+        if(password.length() < 6) {
+            throw new IllegalArgumentException("Password must be at least 6 characters");
+        }
+    }
+
+    private void validateName(String name){
+        if(name == null || name.isEmpty()) {
+            throw new IllegalArgumentException("Name is required");
+        }
+        if(name.length() < 3) {
+            throw new IllegalArgumentException("Name must be at least 3 characters");
+        }
+    }
+
+    private void validatePhoneNumber(String phoneNumber) {
+        if(phoneNumber == null || phoneNumber.isEmpty()) {
+            throw new IllegalArgumentException("Phone number is required");
+        }
+        if(!PHONE_PATTERN.matcher(phoneNumber).matches()) {
+            throw new IllegalArgumentException("Invalid phone number");
+        }
+    }
+
+    private void validateAge(Role role, LocalDate dateOfBirth) {
+        if(dateOfBirth == null) {
+            throw new IllegalArgumentException("Date of birth is required");
+        }
+
+        int age = calculateAge(dateOfBirth);
+
+        if(age < 16 || age > 80) {
+            throw new IllegalArgumentException("User must be between 16 and 80 years old");
+        }
+
+        if(role == Role.EMPLOYEE) {
+            if(age < 18 || age > 65) {
+                throw new IllegalArgumentException("Employee must be between 18 and 65 years old");
+            }
+        }
+    }
+
+    private int calculateAge(LocalDate dateOfBirth) {
+        return Period.between(dateOfBirth, LocalDate.now()).getYears();
+    }
+}

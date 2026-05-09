@@ -16,7 +16,7 @@ public class User {
     private final LocalDate dateOfBirth;
     private final LocalDateTime createdAt;
 
-    public User(Builder builder) {
+    private User(Builder builder) {
         this.id = builder.id;
         this.email = builder.email;
         this.passwordHash = builder.passwordHash;
