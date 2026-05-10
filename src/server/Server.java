@@ -5,9 +5,8 @@ import services.UserService;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.SocketException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -24,11 +23,12 @@ public class Server {
             CORE_THREADS,
             MAX_THREADS,
             IDLE_TIMEOUT, TimeUnit.SECONDS,
-            new LinkedBlockingDeque<>(QUEUE_SIZE),
+            new LinkedBlockingQueue<>(QUEUE_SIZE),
             new ThreadPoolExecutor.CallerRunsPolicy()
     );
 
     private final UserService userService;
+    private volatile ServerSocket serverSocket;
 
     public Server(UserService userService) {
         this.userService = userService;
@@ -41,8 +41,8 @@ public class Server {
         System.out.println("Queue capacity: " + QUEUE_SIZE);
         System.out.println("Waiting for connections...\n");
 
-        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
-
+        try {
+            serverSocket = new ServerSocket(PORT);
             registerShutdownHook();
 
             while (!Thread.currentThread().isInterrupted()) {
@@ -57,35 +57,37 @@ public class Server {
                     threadPool.execute(new ClientHandler(clientSocket, userService));
 
                 } catch (IOException e) {
-                    if (!Thread.currentThread().isInterrupted()) {
-                        System.out.println("Error accepting client connection: " + e.getMessage());
-                    }
+                    if (serverSocket.isClosed()) break;
+                    System.out.println("Error accepting client connection: " + e.getMessage());
                 }
             }
         } catch (IOException e) {
             System.out.println("Server failed to start: " + e.getMessage());
-        } finally{
+        } finally {
             shutdownThreadPool();
+            try {
+                if (serverSocket != null) serverSocket.close();
+            } catch (IOException ignored) {}
         }
     }
 
     private void registerShutdownHook() {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.out.println("\nServer shutting down...");
-            shutdownThreadPool();
+            try {
+                if (serverSocket != null) serverSocket.close();
+            } catch (IOException ignored) {}
         }));
     }
 
     private void shutdownThreadPool() {
         threadPool.shutdown();
         try {
-            if(!threadPool.awaitTermination(60,TimeUnit.SECONDS)){
+            if (!threadPool.awaitTermination(60, TimeUnit.SECONDS)) {
                 threadPool.shutdownNow();
             }
-
             System.out.println("Server stopped");
-
-        } catch(InterruptedException e){
+        } catch (InterruptedException e) {
             threadPool.shutdownNow();
             Thread.currentThread().interrupt();
         }

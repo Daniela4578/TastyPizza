@@ -68,7 +68,7 @@ public class UserService {
         return userRepository.save(newUser);
     }
 
-    private void validateEmail(String email) {
+    public void validateEmail(String email) {
         if(email == null || email.isEmpty()) {
             throw new IllegalArgumentException("Email is required");
         }
@@ -77,7 +77,7 @@ public class UserService {
         }
     }
 
-    private void validatePassword(String password) {
+    public void validatePassword(String password) {
         if(password == null || password.isEmpty()) {
             throw new IllegalArgumentException("Password is required");
         }
@@ -86,7 +86,7 @@ public class UserService {
         }
     }
 
-    private void validateName(String name){
+    public void validateName(String name){
         if(name == null || name.isEmpty()) {
             throw new IllegalArgumentException("Name is required");
         }
@@ -95,7 +95,7 @@ public class UserService {
         }
     }
 
-    private void validatePhoneNumber(String phoneNumber) {
+    public void validatePhoneNumber(String phoneNumber) {
         if(phoneNumber == null || phoneNumber.isEmpty()) {
             throw new IllegalArgumentException("Phone number is required");
         }
@@ -104,7 +104,7 @@ public class UserService {
         }
     }
 
-    private void validateAge(Role role, LocalDate dateOfBirth) {
+    public void validateAge(Role role, LocalDate dateOfBirth) {
         if(dateOfBirth == null) {
             throw new IllegalArgumentException("Date of birth is required");
         }

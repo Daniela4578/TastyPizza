@@ -33,22 +33,22 @@ public class JdbcUserRepository implements UserRepository {
 
             statement.executeUpdate();
 
-            ResultSet generatedKeys = statement.getGeneratedKeys();
-            if(generatedKeys.next()){
-                Long id = generatedKeys.getLong(1);
-
-                return User.builder()
-                        .id(id)
-                        .email(user.getEmail())
-                        .passwordHash(user.getPasswordHash())
-                        .firstName(user.getFirstName())
-                        .lastName(user.getLastName())
-                        .phoneNumber(user.getPhoneNumber())
-                        .role(user.getRole())
-                        .dateOfBirth(user.getDateOfBirth())
-                        .build();
+            try (ResultSet generatedKeys = statement.getGeneratedKeys()) {
+                if (generatedKeys.next()) {
+                    Long id = generatedKeys.getLong(1);
+                    return User.builder()
+                            .id(id)
+                            .email(user.getEmail())
+                            .passwordHash(user.getPasswordHash())
+                            .firstName(user.getFirstName())
+                            .lastName(user.getLastName())
+                            .phoneNumber(user.getPhoneNumber())
+                            .role(user.getRole())
+                            .dateOfBirth(user.getDateOfBirth())
+                            .build();
+                }
+                throw new SQLException("Failed to retrieve generated id after save.");
             }
-            throw new SQLException("Failed to retrieve generated id after save.");
 
         } catch (SQLException e) {
             throw new RuntimeException("Failed to save user: " + user.getEmail(), e);
