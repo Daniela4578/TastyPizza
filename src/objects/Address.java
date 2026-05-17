@@ -28,8 +28,8 @@ public class Address {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Address a)) return false;
-        return Objects.equals(id, a.id);
+        if (!(o instanceof Address address)) return false;
+        return Objects.equals(id, address.id);
     }
 
     @Override public int hashCode() { return Objects.hash(id); }
