@@ -9,7 +9,7 @@ public class Address {
     private final double latitude;
     private final double longitude;
 
-    private Address(Builder builder){
+    private Address(Builder builder) {
         this.id = builder.id;
         this.userId = builder.userId;
         this.name = builder.name;
@@ -17,13 +17,29 @@ public class Address {
         this.longitude = builder.longitude;
     }
 
-    public static Builder builder(){return new Builder();}
+    public static Builder builder() {
+        return new Builder();
+    }
 
-    public Long getId() {return id;}
-    public Long getUserId() {return userId;}
-    public String getName() {return name;}
-    public double getLatitude() {return latitude;}
-    public double getLongitude() {return longitude;}
+    public Long getId() {
+        return id;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public double getLatitude() {
+        return latitude;
+    }
+
+    public double getLongitude() {
+        return longitude;
+    }
 
     @Override
     public boolean equals(Object o) {
@@ -32,7 +48,10 @@ public class Address {
         return Objects.equals(id, address.id);
     }
 
-    @Override public int hashCode() { return Objects.hash(id); }
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
 
     @Override
     public String toString() {
@@ -40,40 +59,40 @@ public class Address {
                 id, name, latitude, longitude);
     }
 
-    public static class Builder{
+    public static class Builder {
         private Long id;
         private Long userId;
         private String name;
         private double latitude;
         private double longitude;
 
-        public Builder id(Long id){
+        public Builder id(Long id) {
             this.id = id;
             return this;
         }
 
-        public Builder userId(Long userId){
+        public Builder userId(Long userId) {
             this.userId = userId;
             return this;
         }
 
-        public Builder name(String name){
+        public Builder name(String name) {
             this.name = name;
             return this;
         }
 
-        public Builder latitude(double latitude){
+        public Builder latitude(double latitude) {
             this.latitude = latitude;
             return this;
         }
 
-        public Builder longitude(double longitude){
-            this.latitude = latitude;
+        public Builder longitude(double longitude) {
+            this.longitude = longitude;
             return this;
         }
 
-        public Address build(){
-            Objects.requireNonNull(name, "Address name is required!");
+        public Address build() {
+            Objects.requireNonNull(name, "Address name is required");
             return new Address(this);
         }
     }

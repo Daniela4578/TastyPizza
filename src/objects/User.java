@@ -6,6 +6,7 @@ import java.time.Period;
 import java.util.Objects;
 
 public class User {
+
     private final Long id;
     private final String email;
     private final String passwordHash;
@@ -13,6 +14,7 @@ public class User {
     private final String lastName;
     private final String phoneNumber;
     private final Role role;
+    private final AccountStatus status;
     private final LocalDate dateOfBirth;
     private final LocalDateTime createdAt;
 
@@ -24,29 +26,60 @@ public class User {
         this.lastName = builder.lastName;
         this.phoneNumber = builder.phoneNumber;
         this.role = builder.role;
+        this.status = builder.status;
         this.dateOfBirth = builder.dateOfBirth;
         this.createdAt = builder.createdAt;
     }
 
-    public static Builder builder(){
+    public static Builder builder() {
         return new Builder();
     }
 
-    public Long getId() { return id; }
-    public String getEmail() { return email; }
-    public String getPasswordHash() { return passwordHash; }
-    public String getFirstName() { return firstName; }
-    public String getLastName() { return lastName; }
-    public String getPhoneNumber() { return phoneNumber; }
-    public Role getRole() { return role; }
-    public LocalDate getDateOfBirth() { return dateOfBirth; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
+    public Long getId() {
+        return id;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public String getPasswordHash() {
+        return passwordHash;
+    }
+
+    public String getFirstName() {
+        return firstName;
+    }
+
+    public String getLastName() {
+        return lastName;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public Role getRole() {
+        return role;
+    }
+
+    public LocalDate getDateOfBirth() {
+        return dateOfBirth;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public AccountStatus getStatus() {
+        return status;
+    }
 
     public String getFullName() {
         return firstName + " " + lastName;
     }
 
-    public int getAge(){
+    public int getAge() {
         return Period.between(this.dateOfBirth, LocalDate.now()).getYears();
     }
 
@@ -64,9 +97,9 @@ public class User {
 
     @Override
     public String toString() {
-        return  String.format("User[id: %d, email: '%s', name: '%s', role: %s, age: %d]", id, email, getFullName(), role, getAge());
+        return String.format("User[id: %d, email: '%s', name: '%s', role: %s, status: %s, age: %d]",
+                id, email, getFullName(), role, status, getAge());
     }
-
 
     public static class Builder {
         private Long id;
@@ -76,6 +109,7 @@ public class User {
         private String lastName;
         private String phoneNumber;
         private Role role;
+        private AccountStatus status = AccountStatus.ACTIVE;
         private LocalDate dateOfBirth;
         private LocalDateTime createdAt;
 
@@ -83,46 +117,59 @@ public class User {
             this.id = id;
             return this;
         }
+
         public Builder email(String email) {
             this.email = email;
             return this;
         }
-        public Builder passwordHash(String passwordHash) {
-            this.passwordHash = passwordHash;
+
+        public Builder passwordHash(String hash) {
+            this.passwordHash = hash;
             return this;
         }
+
         public Builder firstName(String firstName) {
             this.firstName = firstName;
             return this;
         }
+
         public Builder lastName(String lastName) {
             this.lastName = lastName;
             return this;
         }
-        public Builder phoneNumber(String phoneNumber) {
-            this.phoneNumber = phoneNumber;
+
+        public Builder phoneNumber(String phone) {
+            this.phoneNumber = phone;
             return this;
         }
+
         public Builder role(Role role) {
             this.role = role;
             return this;
         }
-        public Builder dateOfBirth(LocalDate dateOfBirth) {
-            this.dateOfBirth = dateOfBirth;
+
+        public Builder status(AccountStatus status) {
+            this.status = status;
             return this;
         }
-        public Builder createdAt(LocalDateTime createdAt) {
-            this.createdAt = createdAt;
+
+        public Builder dateOfBirth(LocalDate dob) {
+            this.dateOfBirth = dob;
+            return this;
+        }
+
+        public Builder createdAt(LocalDateTime time) {
+            this.createdAt = time;
             return this;
         }
 
         public User build() {
-            Objects.requireNonNull(email, "Email is required!");
-            Objects.requireNonNull(passwordHash, "Password hash is required!");
-            Objects.requireNonNull(firstName, "First name is required!");
-            Objects.requireNonNull(lastName, "Last name is required!");
-            Objects.requireNonNull(role, "Role is required!");
-            Objects.requireNonNull(dateOfBirth, "Date of birth is required!");
+            Objects.requireNonNull(email, "Email is required");
+            Objects.requireNonNull(passwordHash, "Password is required");
+            Objects.requireNonNull(firstName, "First name is required");
+            Objects.requireNonNull(lastName, "Last name is required");
+            Objects.requireNonNull(role, "Role is required");
+            Objects.requireNonNull(dateOfBirth, "Date of birth is required");
             return new User(this);
         }
     }

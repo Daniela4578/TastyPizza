@@ -7,27 +7,37 @@ public class Category {
     private final Long id;
     private final String name;
 
-    public Category(Builder builder) {
+    private Category(Builder builder) {
         this.id = builder.id;
         this.name = builder.name;
     }
 
-    public static Builder builder() { return new Builder(); }
+    public static Builder builder() {
+        return new Builder();
+    }
 
-    public Long getId() {return id;}
-    public String getName() {return name;}
+    public Long getId() {
+        return id;
+    }
 
-    @Override public boolean equals(Object o) {
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof Category category)) return false;
         return Objects.equals(id, category.id);
     }
 
-    @Override public int hashCode() {
+    @Override
+    public int hashCode() {
         return Objects.hash(id);
     }
 
-    @Override public String toString() {
+    @Override
+    public String toString() {
         return String.format("Category[id: %d, name: '%s']", id, name);
     }
 

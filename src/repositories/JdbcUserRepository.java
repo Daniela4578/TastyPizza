@@ -1,6 +1,7 @@
 package repositories;
 
 import db.DatabaseConnection;
+import objects.AccountStatus;
 import objects.Role;
 import objects.User;
 
@@ -20,7 +21,7 @@ public class JdbcUserRepository implements UserRepository {
 
     @Override
     public User save(User user) {
-        String sql = "INSERT INTO users(email, password_hash, first_name, last_name, phone, role, date_of_birth) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO users(email, password_hash, first_name, last_name, phone, role, status, date_of_birth) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
         try(PreparedStatement statement = databaseConnection.getConnection().prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)){
             statement.setString(1, user.getEmail());
@@ -29,7 +30,8 @@ public class JdbcUserRepository implements UserRepository {
             statement.setString(4, user.getLastName());
             statement.setString(5, user.getPhoneNumber());
             statement.setString(6, user.getRole().toString());
-            statement.setDate(7, Date.valueOf(user.getDateOfBirth()));
+            statement.setString(7, user.getStatus().name());
+            statement.setDate(8, Date.valueOf(user.getDateOfBirth()));
 
             statement.executeUpdate();
 
@@ -45,6 +47,7 @@ public class JdbcUserRepository implements UserRepository {
                             .phoneNumber(user.getPhoneNumber())
                             .role(user.getRole())
                             .dateOfBirth(user.getDateOfBirth())
+                            .status(user.getStatus())
                             .build();
                 }
                 throw new SQLException("Failed to retrieve generated id after save.");
@@ -75,6 +78,7 @@ public class JdbcUserRepository implements UserRepository {
                             .role(Role.valueOf(resultSet.getString("role")))
                             .dateOfBirth(resultSet.getDate("date_of_birth").toLocalDate())
                             .createdAt(resultSet.getTimestamp("created_at").toLocalDateTime())
+                            .status(AccountStatus.valueOf(resultSet.getString("status")))
                             .build();
 
                     return Optional.of(user);
