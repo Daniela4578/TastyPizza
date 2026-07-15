@@ -14,18 +14,10 @@ import java.time.Period;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
-/**
- * Business logic for user operations.
- * Clean Code: single responsibility - only business logic
- * Effective Java Item 5: dependency injection
- * Effective Java Item 71: no longer propagates NoSuchAlgorithmException
- *   because PasswordHasher now wraps it internally
- */
 public class UserService {
 
     private final UserRepository userRepository;
 
-    // Effective Java Item 67: compile patterns once, reuse many times
     private static final Pattern EMAIL_PATTERN = Pattern.compile(
             "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
     private static final Pattern PHONE_PATTERN = Pattern.compile(
@@ -35,7 +27,6 @@ public class UserService {
         this.userRepository = userRepository;
     }
 
-    // no longer throws NoSuchAlgorithmException — PasswordHasher handles it
     public User register(String email, String password, String firstName,
                          String lastName, String phoneNumber,
                          LocalDate dateOfBirth, Role role) {
@@ -67,7 +58,6 @@ public class UserService {
         return userRepository.save(newUser);
     }
 
-    // no longer throws NoSuchAlgorithmException — PasswordHasher handles it
     public User login(String email, String password) {
         email = email.toLowerCase().trim();
         validateEmail(email);
@@ -80,7 +70,6 @@ public class UserService {
 
         User user = result.get();
 
-        // custom exception — clear message per status
         switch (user.getStatus()) {
             case PENDING     -> throw new AccountNotActiveException("Your account is pending manager approval.");
             case DEACTIVATED -> throw new AccountNotActiveException("This account has been deactivated.");
@@ -100,8 +89,6 @@ public class UserService {
                 new UserNotFoundException("User not found: " + userId));
         userRepository.updateStatus(userId, AccountStatus.DEACTIVATED);
     }
-
-    // ── Validation — public so ClientHandler can loop per field ─────────────
 
     public void validateEmail(String email) {
         if (email == null || email.isBlank())
