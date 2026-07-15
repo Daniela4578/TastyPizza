@@ -12,4 +12,5 @@ public interface ProductRepository {
     List<ProductSize> findSizesByProductId(Long productId);
     Product save(Product product);
     void setActive(Long id, boolean active);
+    List<Product> findInactiveByIngredientId(Long ingredientId);
 }

@@ -1,6 +1,7 @@
 package services;
 
 import objects.Ingredient;
+import objects.Product;
 import repositories.Ingredient.IngredientQuantity;
 import repositories.Ingredient.IngredientRepository;
 
@@ -18,15 +19,20 @@ public class IngredientService {
         this.productService       = productService;
     }
 
-    public List<Ingredient> getAllIngredients()   { return ingredientRepository.findAll(); }
+    public List<Ingredient> getAllIngredients()    { return ingredientRepository.findAll(); }
     public List<Ingredient> getLowStockIngredients(){ return ingredientRepository.findLowStock(); }
 
     public void restock(Long ingredientId, BigDecimal amountToAdd) {
         if (amountToAdd == null || amountToAdd.compareTo(BigDecimal.ZERO) <= 0)
             throw new IllegalArgumentException("Amount must be greater than zero");
+
         Ingredient ingredient = ingredientRepository.findById(ingredientId).orElseThrow(() ->
                 new IllegalArgumentException("Ingredient not found: " + ingredientId));
-        ingredientRepository.updateStock(ingredientId, ingredient.getStockQuantity().add(amountToAdd));
+
+        BigDecimal newQuantity = ingredient.getStockQuantity().add(amountToAdd);
+        ingredientRepository.updateStock(ingredientId, newQuantity);
+
+        reactivateProductsIfPossible(ingredientId);
     }
 
     public void setMinimumStock(Long ingredientId, BigDecimal minimum) {
@@ -36,7 +42,6 @@ public class IngredientService {
                 new IllegalArgumentException("Ingredient not found: " + ingredientId));
         ingredientRepository.updateMinimumStock(ingredientId, minimum);
     }
-
 
     public void deductStockForProduct(Long productId, int quantity) {
         List<IngredientQuantity> recipe = ingredientRepository.findByProductId(productId);
@@ -48,7 +53,6 @@ public class IngredientService {
                 if (newStock.compareTo(BigDecimal.ZERO) < 0) newStock = BigDecimal.ZERO;
                 ingredientRepository.updateStock(ingredient.getId(), newStock);
 
-                // if out of stock — deactivate products that use this ingredient
                 if (newStock.compareTo(BigDecimal.ZERO) == 0) {
                     productService.getAllActiveProducts().forEach(product -> {
                         boolean usesIngredient = ingredientRepository
@@ -58,6 +62,23 @@ public class IngredientService {
                     });
                 }
             });
+        }
+    }
+
+    private void reactivateProductsIfPossible(Long restockedIngredientId) {
+        List<Product> candidates = productService.getInactiveProductsByIngredient(restockedIngredientId);
+
+        for (Product product : candidates) {
+            List<IngredientQuantity> recipe = ingredientRepository.findByProductId(product.getId());
+
+            boolean allInStock = recipe.stream().allMatch(iq ->
+                    ingredientRepository.findById(iq.getIngredientId())
+                            .map(ing -> ing.getStockQuantity().compareTo(BigDecimal.ZERO) > 0)
+                            .orElse(false));
+
+            if (allInStock) {
+                productService.activateProduct(product.getId());
+            }
         }
     }
 }

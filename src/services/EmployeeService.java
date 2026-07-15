@@ -11,6 +11,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class EmployeeService {
 
@@ -26,9 +27,23 @@ public class EmployeeService {
         this.userRepository            = userRepository;
     }
 
+    // ── Employee lists ──────────────────────────────────────────────────────
+
     public List<User> getPendingEmployees() {
         return userRepository.findByStatus(AccountStatus.PENDING);
     }
+
+    public List<User> getActiveEmployees() {
+        return userRepository.findByStatus(AccountStatus.ACTIVE).stream()
+                .filter(u -> u.getRole() == Role.EMPLOYEE)
+                .collect(Collectors.toList());
+    }
+
+    public Optional<User> findUser(Long userId) {
+        return userRepository.findById(userId);
+    }
+
+    // ── Approval flow ───────────────────────────────────────────────────────
 
     public EmployeeDetails approveEmployee(Long userId, BigDecimal salary, LocalDate hireDate) {
         if (salary == null || salary.compareTo(BigDecimal.ZERO) < 0)
@@ -56,6 +71,8 @@ public class EmployeeService {
         userRepository.updateStatus(userId, AccountStatus.FIRED);
     }
 
+    // ── Employee details ────────────────────────────────────────────────────
+
     public Optional<EmployeeDetails> getEmployeeDetails(Long userId) {
         return employeeDetailsRepository.findByUserId(userId);
     }
@@ -71,6 +88,7 @@ public class EmployeeService {
                 new UserNotFoundException("No employee details found for user: " + userId));
         employeeDetailsRepository.updateSalary(userId, newSalary);
     }
+
 
     public Shift assignShift(Long employeeId, String employeeName,
                              LocalDate shiftDate, LocalTime startTime, LocalTime endTime) {

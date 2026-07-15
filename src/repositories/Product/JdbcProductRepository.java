@@ -110,6 +110,15 @@ public class JdbcProductRepository implements ProductRepository {
         }
     }
 
+    @Override
+    public List<Product> findInactiveByIngredientId(Long ingredientId) {
+        String sql = "SELECT p.*, c.name AS category_name FROM products p " +
+                "JOIN categories c ON c.id = p.category_id " +
+                "JOIN product_ingredients pi ON pi.product_id = p.id " +
+                "WHERE pi.ingredient_id = ? AND p.is_active = FALSE";
+        return queryProducts(sql, ingredientId);
+    }
+
     private List<Product> queryProducts(String sql, Long param) {
         List<Product> list = new ArrayList<>();
         try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {

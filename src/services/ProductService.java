@@ -25,6 +25,10 @@ public class ProductService {
     public List<Product>  getProductsByCategory(Long catId)  { return productRepository.findActiveByCategoryId(catId); }
     public List<ProductSize> getSizesByProduct(Long prodId)  { return productRepository.findSizesByProductId(prodId); }
 
+    public List<Product> getInactiveProductsByIngredient(Long ingredientId) {
+        return productRepository.findInactiveByIngredientId(ingredientId);
+    }
+
     public Product addProduct(String name, String description, BigDecimal price, Long categoryId) {
         if (name == null || name.isBlank())
             throw new IllegalArgumentException("Product name cannot be empty");
