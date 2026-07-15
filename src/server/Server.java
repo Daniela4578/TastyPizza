@@ -1,6 +1,6 @@
 package server;
 
-import services.UserService;
+import services.ServiceContainer;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -27,11 +27,11 @@ public class Server {
             new ThreadPoolExecutor.CallerRunsPolicy()
     );
 
-    private final UserService userService;
+    private final ServiceContainer services;
     private volatile ServerSocket serverSocket;
 
-    public Server(UserService userService) {
-        this.userService = userService;
+    public Server(ServiceContainer services) {
+        this.services = services;
     }
 
     public void start() {
@@ -54,7 +54,7 @@ public class Server {
                     String clientAddress = clientSocket.getInetAddress().getHostAddress();
                     System.out.println("Client connected: " + clientAddress);
 
-                    threadPool.execute(new ClientHandler(clientSocket, userService));
+                    threadPool.execute(new ClientHandler(clientSocket, services));
 
                 } catch (IOException e) {
                     if (serverSocket.isClosed()) break;

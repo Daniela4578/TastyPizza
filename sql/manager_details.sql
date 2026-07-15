@@ -1,0 +1,2 @@
+INSERT INTO users (email, password_hash, first_name, last_name, phone, role, status, date_of_birth)
+VALUES ('manager@tastypizza.com', '123456', 'Boss', 'Manager', '+359888000000', 'MANAGER', 'ACTIVE', '1980-01-01');

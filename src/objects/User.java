@@ -95,10 +95,12 @@ public class User {
         return Objects.hash(email);
     }
 
+
     @Override
     public String toString() {
-        return String.format("User[id: %d, email: '%s', name: '%s', role: %s, status: %s, age: %d]",
-                id, email, getFullName(), role, status, getAge());
+        return String.format("User[id: %d, email: '%s', name: '%s', role: %s, status: %s, age: %s]",
+                id, email, getFullName(), role, status,
+                dateOfBirth != null ? String.valueOf(getAge()) : "unknown");
     }
 
     public static class Builder {
