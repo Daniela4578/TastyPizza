@@ -58,10 +58,8 @@ public class JdbcProductRepository implements ProductRepository {
                 while (rs.next()) {
                     sizes.add(ProductSize.builder()
                             .id(rs.getLong("id"))
-                            .productId(rs.getLong("product_id"))
                             .sizeLabel(rs.getString("size_label"))
                             .price(rs.getBigDecimal("price"))
-                            .grammage(rs.getBigDecimal("grammage"))
                             .build());
                 }
             }

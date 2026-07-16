@@ -9,6 +9,10 @@ import repositories.Ingredient.IngredientRepository;
 import repositories.Ingredient.JdbcIngredientRepository;
 import repositories.Order.JdbcOrderRepository;
 import repositories.Order.OrderRepository;
+import repositories.OrderStatusHistory.JdbcOrderStatusHistoryRepository;
+import repositories.OrderStatusHistory.OrderStatusHistoryRepository;
+import repositories.Payment.JdbcPaymentRepository;
+import repositories.Payment.PaymentRepository;
 import repositories.Product.JdbcProductRepository;
 import repositories.Product.ProductRepository;
 import repositories.Shift.JdbcShiftRepository;
@@ -22,34 +26,37 @@ public class Main {
 
     public static void main(String[] args) {
         try {
-            // database
             DatabaseConnection db = DatabaseConnection.getInstance();
 
             // repositories
-            UserRepository            userRepository            = new JdbcUserRepository(db);
-            EmployeeDetailsRepository employeeDetailsRepository = new JdbcEmployeeDetailsRepository(db);
-            ShiftRepository           shiftRepository           = new JdbcShiftRepository(db);
-            AddressRepository         addressRepository         = new JdbcAddressRepository(db);
-            CategoryRepository        categoryRepository        = new JdbcCategoryRepository(db);
-            ProductRepository         productRepository         = new JdbcProductRepository(db);
-            IngredientRepository      ingredientRepository      = new JdbcIngredientRepository(db);
-            OrderRepository           orderRepository           = new JdbcOrderRepository(db);
+            UserRepository               userRepository               = new JdbcUserRepository(db);
+            EmployeeDetailsRepository    employeeDetailsRepository    = new JdbcEmployeeDetailsRepository(db);
+            ShiftRepository              shiftRepository              = new JdbcShiftRepository(db);
+            AddressRepository            addressRepository            = new JdbcAddressRepository(db);
+            CategoryRepository           categoryRepository           = new JdbcCategoryRepository(db);
+            ProductRepository            productRepository            = new JdbcProductRepository(db);
+            IngredientRepository         ingredientRepository         = new JdbcIngredientRepository(db);
+            OrderRepository              orderRepository              = new JdbcOrderRepository(db);
+            PaymentRepository            paymentRepository            = new JdbcPaymentRepository(db);
+            OrderStatusHistoryRepository historyRepository            = new JdbcOrderStatusHistoryRepository(db);
 
             // services
-            UserService       userService       = new UserService(userRepository);
-            EmployeeService   employeeService   = new EmployeeService(
+            UserService         userService         = new UserService(userRepository);
+            EmployeeService     employeeService     = new EmployeeService(
                     employeeDetailsRepository, shiftRepository, userRepository);
-            AddressService    addressService    = new AddressService(addressRepository);
-            ProductService    productService    = new ProductService(productRepository, categoryRepository);
-            IngredientService ingredientService = new IngredientService(ingredientRepository, productService);
-            OrderService      orderService      = new OrderService(orderRepository, ingredientService);
+            AddressService      addressService      = new AddressService(addressRepository);
+            ProductService      productService      = new ProductService(productRepository, categoryRepository);
+            IngredientService   ingredientService   = new IngredientService(ingredientRepository, productService);
+            PaymentService      paymentService      = new PaymentService(paymentRepository);
+            OrderService        orderService        = new OrderService(orderRepository, ingredientService, paymentService);
+            OrderHistoryService orderHistoryService = new OrderHistoryService(historyRepository);
 
             // container
             ServiceContainer services = new ServiceContainer(
                     userService, employeeService, addressService,
-                    productService, orderService, ingredientService);
+                    productService, orderService, ingredientService,
+                    paymentService, orderHistoryService);
 
-            // start
             new Server(services).start();
 
         } catch (Exception e) {

@@ -5,43 +5,21 @@ import java.util.Objects;
 
 public class ProductSize {
 
-    private final Long id;
-    private final Long productId;
-    private final String sizeLabel;
+    private final Long       id;
+    private final String     sizeLabel;
     private final BigDecimal price;
-    private final BigDecimal grammage;
 
     private ProductSize(Builder builder) {
-        this.id = builder.id;
-        this.productId = builder.productId;
+        this.id        = builder.id;
         this.sizeLabel = builder.sizeLabel;
-        this.price = builder.price;
-        this.grammage = builder.grammage;
+        this.price     = builder.price;
     }
 
-    public static Builder builder() {
-        return new Builder();
-    }
+    public static Builder builder() { return new Builder(); }
 
-    public Long getId() {
-        return id;
-    }
-
-    public Long getProductId() {
-        return productId;
-    }
-
-    public String getSizeLabel() {
-        return sizeLabel;
-    }
-
-    public BigDecimal getPrice() {
-        return price;
-    }
-
-    public BigDecimal getGrammage() {
-        return grammage;
-    }
+    public Long       getId()        { return id; }
+    public String     getSizeLabel() { return sizeLabel; }
+    public BigDecimal getPrice()     { return price; }
 
     @Override
     public boolean equals(Object o) {
@@ -50,10 +28,7 @@ public class ProductSize {
         return Objects.equals(id, s.id);
     }
 
-    @Override
-    public int hashCode() {
-        return Objects.hash(id);
-    }
+    @Override public int hashCode() { return Objects.hash(id); }
 
     @Override
     public String toString() {
@@ -61,41 +36,17 @@ public class ProductSize {
     }
 
     public static class Builder {
-        private Long id;
-        private Long productId;
-        private String sizeLabel;
+        private Long       id;
+        private String     sizeLabel;
         private BigDecimal price;
-        private BigDecimal grammage;
 
-        public Builder id(Long id) {
-            this.id = id;
-            return this;
-        }
-
-        public Builder productId(Long productId) {
-            this.productId = productId;
-            return this;
-        }
-
-        public Builder sizeLabel(String label) {
-            this.sizeLabel = label;
-            return this;
-        }
-
-        public Builder price(BigDecimal price) {
-            this.price = price;
-            return this;
-        }
-
-        public Builder grammage(BigDecimal g) {
-            this.grammage = g;
-            return this;
-        }
+        public Builder id(Long id)             { this.id = id;             return this; }
+        public Builder sizeLabel(String label) { this.sizeLabel = label;   return this; }
+        public Builder price(BigDecimal price) { this.price = price;       return this; }
 
         public ProductSize build() {
-            Objects.requireNonNull(productId, "Product ID is required");
             Objects.requireNonNull(sizeLabel, "Size label is required");
-            Objects.requireNonNull(price, "Price is required");
+            Objects.requireNonNull(price,     "Price is required");
             return new ProductSize(this);
         }
     }

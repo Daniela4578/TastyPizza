@@ -79,8 +79,9 @@ public class ClientHandler implements Runnable {
                                 case "2" -> handleViewMyDetails(loggedInUser);
                                 case "3" -> handleViewPendingOrders();
                                 case "4" -> handleProcessOrder(loggedInUser);
-                                case "5" -> handleViewLowStock();
-                                case "6" -> { out.println("Logged out."); loggedInUser = null; }
+                                case "5" -> handleDeliverOrder();
+                                case "6" -> handleViewLowStock();
+                                case "7" -> { out.println("Logged out."); loggedInUser = null; }
                                 default  -> out.println("Invalid choice.");
                             }
                         }
@@ -139,8 +140,9 @@ public class ClientHandler implements Runnable {
         out.println("2 - My details");
         out.println("3 - View pending orders");
         out.println("4 - Process order");
-        out.println("5 - View low stock");
-        out.println("6 - Logout");
+        out.println("5 - Mark order as delivered");
+        out.println("6 - View low stock");
+        out.println("7 - Logout");
         out.println("Choose:");
     }
 
@@ -289,7 +291,7 @@ public class ClientHandler implements Runnable {
             List<Product> products = services.getProductService().getProductsByCategory(categories.get(catIdx).getId());
             out.println("\nProducts:");
             for (int i = 0; i < products.size(); i++)
-                out.println((i + 1) + " - " + products.get(i).getName() + " - " + products.get(i).getPrice() + " EUR");
+                out.println((i + 1) + " - " + products.get(i).getName() + " - " + products.get(i).getPrice() + " BGN");
             out.println("0 - Back");
             out.println("Choose:");
 
@@ -339,7 +341,7 @@ public class ClientHandler implements Runnable {
                     .specialInstructions(instructions).build();
             cart.add(newItem);
             BigDecimal cartTotal = cart.stream().map(OrderItem::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
-            out.println(String.format("Added. Cart: %d item(s) | %.2f EUR + %.2f delivery = %.2f EUR total",
+            out.println(String.format("Added. Cart: %d item(s) | %.2f BGN + %.2f delivery = %.2f BGN total",
                     cart.size(), cartTotal, DELIVERY_FEE, cartTotal.add(DELIVERY_FEE)));
         }
 
@@ -375,13 +377,30 @@ public class ClientHandler implements Runnable {
             return;
         }
 
-        out.println("Confirm order? (yes/no):");
+        out.println("\nPAYMENT METHOD:");
+        out.println("1 - Cash on delivery");
+        out.println("2 - Card");
+        out.println("Choose:");
+        String payChoice = in.readLine();
+        PaymentMethod paymentMethod;
+        if ("2".equals(payChoice != null ? payChoice.trim() : "")) {
+            paymentMethod = PaymentMethod.CARD;
+        } else {
+            paymentMethod = PaymentMethod.CASH;
+        }
+        out.println("Payment: " + (paymentMethod == PaymentMethod.CARD ? "Card" : "Cash on delivery"));
+
+        out.println("\nConfirm order? (yes/no):");
         String confirm = in.readLine();
         if (confirm == null || !confirm.trim().equalsIgnoreCase("yes")) { out.println("Order cancelled."); return; }
 
         try {
-            Order order = services.getOrderService().placeOrder(customer.getId(), addressId, cart);
+            Order order = services.getOrderService().placeOrder(customer.getId(), addressId, cart, paymentMethod);
             out.println("\nOrder placed! Order #" + order.getId());
+            out.println("Payment: " + (paymentMethod == PaymentMethod.CARD ? "Card" : "Cash on delivery") + " | Status: PENDING");
+            if (paymentMethod == PaymentMethod.CARD) {
+                out.println("Please have your card ready for the delivery driver.");
+            }
         } catch (Exception e) {
             out.println("\nFailed to place order: " + e.getMessage());
         }
@@ -391,7 +410,31 @@ public class ClientHandler implements Runnable {
         List<Order> orders = services.getOrderService().getMyOrders(customer.getId());
         if (orders.isEmpty()) { out.println("\nNo orders yet."); return; }
         out.println("\nMY ORDERS:");
-        orders.forEach(o -> { out.println(o); out.println("---"); });
+        for (Order o : orders) {
+            out.println(o);
+
+            // show payment info
+            services.getPaymentService().getPaymentForOrder(o.getId()).ifPresent(p ->
+                    out.println(String.format("  Payment: %s | %s",
+                            p.getMethod() == PaymentMethod.CASH ? "Cash on delivery" : "Card",
+                            p.getStatus())));
+
+            // show status timeline from order_status_history
+            // rows are written automatically by MySQL trigger on every status change
+            List<objects.OrderStatusHistory> history =
+                    services.getOrderHistoryService().getHistory(o.getId());
+            if (!history.isEmpty()) {
+                out.println("  Timeline:");
+                history.forEach(h -> {
+                    String from = h.getOldStatus() != null ? h.getOldStatus().name() : "NEW";
+                    String time = h.getChangedAt() != null
+                            ? h.getChangedAt().toLocalTime().toString()
+                            : "unknown";
+                    out.println(String.format("    %s → %s at %s", from, h.getNewStatus(), time));
+                });
+            }
+            out.println("---");
+        }
     }
 
     private void handleMyAddresses(User customer) throws IOException {
@@ -485,6 +528,26 @@ public class ClientHandler implements Runnable {
         try {
             services.getOrderService().processOrder(orderId, employee.getId(), minutes);
             out.println("Order #" + orderId + " is now PROCESSING. ETA: " + minutes + " minutes.");
+        } catch (Exception e) {
+            out.println("Error: " + e.getMessage());
+        }
+    }
+
+    private void handleDeliverOrder() throws IOException {
+        // show processing orders so employee knows which ones are ready to deliver
+        List<Order> processing = services.getOrderService().getProcessingOrders();
+        if (processing.isEmpty()) { out.println("\nNo orders currently being processed."); return; }
+        out.println("\nPROCESSING ORDERS:");
+        processing.forEach(o -> { out.println(o); out.println("---"); });
+
+        out.println("Enter order ID to mark as delivered:");
+        Long orderId = readLong();
+        if (orderId == null) return;
+
+        try {
+            services.getOrderService().deliverOrder(orderId);
+            out.println("Order #" + orderId + " marked as DELIVERED.");
+            out.println("Payment has been marked as COMPLETED.");
         } catch (Exception e) {
             out.println("Error: " + e.getMessage());
         }
@@ -592,14 +655,14 @@ public class ClientHandler implements Runnable {
 
         // show current salary so manager knows what they are changing from
         services.getEmployeeService().getEmployeeDetails(userId).ifPresent(d ->
-                out.println(String.format("Current salary: %.2f EUR", d.getSalary())));
+                out.println(String.format("Current salary: %.2f BGN", d.getSalary())));
 
         out.println("New salary:");
         BigDecimal salary = readBigDecimal();
         if (salary == null) return;
         try {
             services.getEmployeeService().updateSalary(userId, salary);
-            out.println(String.format("Salary updated to %.2f EUR.", salary));
+            out.println(String.format("Salary updated to %.2f BGN.", salary));
         } catch (Exception e) { out.println("Error: " + e.getMessage()); }
     }
 
@@ -637,7 +700,7 @@ public class ClientHandler implements Runnable {
                 List<Product> activeProducts = services.getProductService().getAllActiveProducts();
                 if (activeProducts.isEmpty()) { out.println("No active products."); return; }
                 out.println("ACTIVE PRODUCTS:");
-                activeProducts.forEach(p -> out.println(String.format("[%d] %s — %.2f EUR", p.getId(), p.getName(), p.getPrice())));
+                activeProducts.forEach(p -> out.println(String.format("[%d] %s — %.2f BGN", p.getId(), p.getName(), p.getPrice())));
                 out.println("Enter product ID to deactivate:");
                 Long pid = readLong();
                 if (pid == null) return;
