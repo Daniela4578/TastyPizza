@@ -16,7 +16,6 @@ public class User {
     private final Role role;
     private final AccountStatus status;
     private final LocalDate dateOfBirth;
-    private final LocalDateTime createdAt;
 
     private User(Builder builder) {
         this.id = builder.id;
@@ -28,7 +27,6 @@ public class User {
         this.role = builder.role;
         this.status = builder.status;
         this.dateOfBirth = builder.dateOfBirth;
-        this.createdAt = builder.createdAt;
     }
 
     public static Builder builder() {
@@ -65,10 +63,6 @@ public class User {
 
     public LocalDate getDateOfBirth() {
         return dateOfBirth;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
     }
 
     public AccountStatus getStatus() {
@@ -113,7 +107,6 @@ public class User {
         private Role role;
         private AccountStatus status = AccountStatus.ACTIVE;
         private LocalDate dateOfBirth;
-        private LocalDateTime createdAt;
 
         public Builder id(Long id) {
             this.id = id;
@@ -157,11 +150,6 @@ public class User {
 
         public Builder dateOfBirth(LocalDate dob) {
             this.dateOfBirth = dob;
-            return this;
-        }
-
-        public Builder createdAt(LocalDateTime time) {
-            this.createdAt = time;
             return this;
         }
 

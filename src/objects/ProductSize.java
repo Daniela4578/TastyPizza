@@ -57,7 +57,7 @@ public class ProductSize {
 
     @Override
     public String toString() {
-        return String.format("%s — %.2f BGN", sizeLabel, price);
+        return String.format("%s — %.2f EUR", sizeLabel, price);
     }
 
     public static class Builder {

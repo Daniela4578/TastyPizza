@@ -110,7 +110,7 @@ public class Order {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(String.format("Order #%d | %s | Total: %.2f BGN", id, status, totalPrice));
+        sb.append(String.format("Order #%d | %s | Total: %.2f EUR", id, status, totalPrice));
         if (estimatedDeliveryMinutes != null) {
             sb.append(String.format(" | ETA: %d min", estimatedDeliveryMinutes));
         }

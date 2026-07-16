@@ -123,7 +123,6 @@ public class JdbcUserRepository implements UserRepository {
                 .role(Role.valueOf(rs.getString("role")))
                 .status(AccountStatus.valueOf(rs.getString("status")))
                 .dateOfBirth(rs.getDate("date_of_birth").toLocalDate())
-                .createdAt(rs.getTimestamp("created_at").toLocalDateTime())
                 .build();
     }
 }

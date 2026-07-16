@@ -88,7 +88,7 @@ public class OrderItem {
         String size = sizeName != null ? " (" + sizeName + ")" : "";
         String note = specialInstructions != null && !specialInstructions.isBlank()
                 ? " [" + specialInstructions + "]" : "";
-        return String.format("  %dx %s%s — %.2f BGN%s",
+        return String.format("  %dx %s%s — %.2f EUR%s",
                 quantity, productName, size, getSubtotal(), note);
     }
 

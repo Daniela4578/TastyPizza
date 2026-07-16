@@ -76,7 +76,7 @@ public class Payment {
 
     @Override
     public String toString() {
-        return String.format("Payment[orderId: %d, method: %s, status: %s, amount: %.2f BGN]",
+        return String.format("Payment[orderId: %d, method: %s, status: %s, amount: %.2f EUR]",
                 orderId, method, status, amount);
     }
 

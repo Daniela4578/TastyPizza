@@ -182,18 +182,23 @@ public class ClientHandler implements Runnable {
             }
         }
 
-        try {
-            User user = services.getUserService().register(email, password, firstName, lastName, phone, dob, role);
-            if (user.getStatus() == AccountStatus.PENDING) {
-                out.println("\nRegistration submitted! Your account is pending manager approval.");
-            } else {
-                out.println("\nAccount created successfully!");
-                out.println(user);
+        while (true) {
+            try {
+                User user = services.getUserService().register(email, password, firstName, lastName, phone, dob, role);
+                if (user.getStatus() == AccountStatus.PENDING) {
+                    out.println("\nRegistration submitted! Your account is pending manager approval.");
+                } else {
+                    out.println("\nAccount created successfully!");
+                    out.println(user);
+                }
+                return;
+            } catch (EmailAlreadyExistsException e) {
+                out.println("Error: " + e.getMessage());
+                email = readValidatedInput("Enter a different email:", services.getUserService()::validateEmail);
+            } catch (IllegalArgumentException e) {
+                out.println("\nRegistration failed: " + e.getMessage());
+                return;
             }
-        } catch (EmailAlreadyExistsException e) {
-            out.println("\nRegistration failed: " + e.getMessage());
-        } catch (IllegalArgumentException e) {
-            out.println("\nRegistration failed: " + e.getMessage());
         }
     }
 
@@ -243,11 +248,11 @@ public class ClientHandler implements Runnable {
         for (Product p : products) {
             List<ProductSize> sizes = services.getProductService().getSizesByProduct(p.getId());
             if (sizes.isEmpty()) {
-                out.println(String.format("  [%d] %s - %.2f BGN", p.getId(), p.getName(), p.getPrice()));
+                out.println(String.format("  [%d] %s - %.2f EUR", p.getId(), p.getName(), p.getPrice()));
             } else {
                 out.println(String.format("  [%d] %s", p.getId(), p.getName()));
                 for (ProductSize s : sizes)
-                    out.println(String.format("       %s - %.2f BGN", s.getSizeLabel(), s.getPrice()));
+                    out.println(String.format("       %s - %.2f EUR", s.getSizeLabel(), s.getPrice()));
             }
             if (p.getDescription() != null && !p.getDescription().isBlank())
                 out.println("       " + p.getDescription());
@@ -284,7 +289,7 @@ public class ClientHandler implements Runnable {
             List<Product> products = services.getProductService().getProductsByCategory(categories.get(catIdx).getId());
             out.println("\nProducts:");
             for (int i = 0; i < products.size(); i++)
-                out.println((i + 1) + " - " + products.get(i).getName() + " - " + products.get(i).getPrice() + " BGN");
+                out.println((i + 1) + " - " + products.get(i).getName() + " - " + products.get(i).getPrice() + " EUR");
             out.println("0 - Back");
             out.println("Choose:");
 
@@ -306,7 +311,7 @@ public class ClientHandler implements Runnable {
             if (!sizes.isEmpty()) {
                 out.println("\nChoose size:");
                 for (int i = 0; i < sizes.size(); i++)
-                    out.println((i + 1) + " - " + sizes.get(i).getSizeLabel() + " - " + sizes.get(i).getPrice() + " BGN");
+                    out.println((i + 1) + " - " + sizes.get(i).getSizeLabel() + " - " + sizes.get(i).getPrice() + " EUR");
                 out.println("Choose:");
                 String sizeInput = in.readLine();
                 int sizeIdx;
@@ -327,12 +332,15 @@ public class ClientHandler implements Runnable {
             String instructions = in.readLine();
             if (instructions != null && instructions.isBlank()) instructions = null;
 
-            cart.add(OrderItem.builder()
+            OrderItem newItem = OrderItem.builder()
                     .productId(product.getId()).productName(product.getName())
                     .productSizeId(sizeId).sizeName(sizeName)
                     .quantity(qty).unitPrice(unitPrice)
-                    .specialInstructions(instructions).build());
-            out.println("Added to cart.");
+                    .specialInstructions(instructions).build();
+            cart.add(newItem);
+            BigDecimal cartTotal = cart.stream().map(OrderItem::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
+            out.println(String.format("Added. Cart: %d item(s) | %.2f EUR + %.2f delivery = %.2f EUR total",
+                    cart.size(), cartTotal, DELIVERY_FEE, cartTotal.add(DELIVERY_FEE)));
         }
 
         if (cart.isEmpty()) { out.println("Cart is empty. Order cancelled."); return; }
@@ -340,9 +348,9 @@ public class ClientHandler implements Runnable {
         out.println("\nYOUR ORDER:");
         BigDecimal itemsTotal = BigDecimal.ZERO;
         for (OrderItem item : cart) { out.println(item); itemsTotal = itemsTotal.add(item.getSubtotal()); }
-        out.println(String.format("Items:    %.2f BGN", itemsTotal));
-        out.println(String.format("Delivery: %.2f BGN", DELIVERY_FEE));
-        out.println(String.format("TOTAL:    %.2f BGN", itemsTotal.add(DELIVERY_FEE)));
+        out.println(String.format("Items:    %.2f EUR", itemsTotal));
+        out.println(String.format("Delivery: %.2f EUR", DELIVERY_FEE));
+        out.println(String.format("TOTAL:    %.2f EUR", itemsTotal.add(DELIVERY_FEE)));
 
         out.println("\nDELIVERY ADDRESS:");
         for (int i = 0; i < addresses.size(); i++)
@@ -461,8 +469,13 @@ public class ClientHandler implements Runnable {
     }
 
     private void handleProcessOrder(User employee) throws IOException {
-        out.println("\nPROCESS ORDER:");
-        out.println("Order ID:");
+        // show pending orders so employee knows which IDs exist
+        List<Order> pending = services.getOrderService().getPendingOrders();
+        if (pending.isEmpty()) { out.println("\nNo pending orders to process."); return; }
+        out.println("\nPENDING ORDERS:");
+        pending.forEach(o -> { out.println(o); out.println("---"); });
+
+        out.println("Enter order ID to process:");
         Long orderId = readLong();
         if (orderId == null) return;
         out.println("Estimated delivery time (minutes):");
@@ -471,7 +484,7 @@ public class ClientHandler implements Runnable {
         catch (NumberFormatException e) { out.println("Invalid time."); return; }
         try {
             services.getOrderService().processOrder(orderId, employee.getId(), minutes);
-            out.println("Order #" + orderId + " is now PROCESSING. ETA: " + minutes + " min.");
+            out.println("Order #" + orderId + " is now PROCESSING. ETA: " + minutes + " minutes.");
         } catch (Exception e) {
             out.println("Error: " + e.getMessage());
         }
@@ -511,9 +524,19 @@ public class ClientHandler implements Runnable {
 
     private void handleFireEmployee() throws IOException {
         out.println("\nFIRE EMPLOYEE:");
-        out.println("Employee user ID:");
+        List<User> active = services.getEmployeeService().getActiveEmployees();
+        if (active.isEmpty()) { out.println("No active employees."); return; }
+        out.println("ACTIVE EMPLOYEES:");
+        active.forEach(u -> out.println(String.format("[%d] %s — %s", u.getId(), u.getFullName(), u.getEmail())));
+
+        out.println("Enter employee user ID:");
         Long userId = readLong();
         if (userId == null) return;
+
+        // show who is being fired before asking to confirm
+        services.getEmployeeService().findUser(userId).ifPresent(u ->
+                out.println("You are about to fire: " + u.getFullName() + " (" + u.getEmail() + ")"));
+
         out.println("Are you sure? (yes/no):");
         String confirm = in.readLine();
         if (confirm != null && confirm.trim().equalsIgnoreCase("yes")) {
@@ -524,11 +547,22 @@ public class ClientHandler implements Runnable {
 
     private void handleAssignShift() throws IOException {
         out.println("\nASSIGN SHIFT:");
-        out.println("Employee user ID:");
+        List<User> active = services.getEmployeeService().getActiveEmployees();
+        if (active.isEmpty()) { out.println("No active employees."); return; }
+        out.println("ACTIVE EMPLOYEES:");
+        active.forEach(u -> out.println(String.format("[%d] %s", u.getId(), u.getFullName())));
+
+        out.println("Enter employee user ID:");
         Long employeeId = readLong();
         if (employeeId == null) return;
-        out.println("Employee name:");
-        String employeeName = in.readLine();
+
+        // auto-lookup employee name — manager does not have to type it
+        String employeeName = services.getEmployeeService().findUser(employeeId)
+                .map(User::getFullName)
+                .orElse(null);
+        if (employeeName == null) { out.println("Employee not found."); return; }
+        out.println("Assigning shift to: " + employeeName);
+
         LocalDate date      = readValidatedDate("Shift date (YYYY-MM-DD):");
         LocalTime startTime = readValidatedTime("Start time (HH:MM):");
         LocalTime endTime   = readValidatedTime("End time (HH:MM):");
@@ -547,14 +581,26 @@ public class ClientHandler implements Runnable {
 
     private void handleUpdateSalary() throws IOException {
         out.println("\nUPDATE SALARY:");
-        out.println("Employee user ID:");
+        List<User> active = services.getEmployeeService().getActiveEmployees();
+        if (active.isEmpty()) { out.println("No active employees."); return; }
+        out.println("ACTIVE EMPLOYEES:");
+        active.forEach(u -> out.println(String.format("[%d] %s", u.getId(), u.getFullName())));
+
+        out.println("Enter employee user ID:");
         Long userId = readLong();
         if (userId == null) return;
+
+        // show current salary so manager knows what they are changing from
+        services.getEmployeeService().getEmployeeDetails(userId).ifPresent(d ->
+                out.println(String.format("Current salary: %.2f EUR", d.getSalary())));
+
         out.println("New salary:");
         BigDecimal salary = readBigDecimal();
         if (salary == null) return;
-        try { services.getEmployeeService().updateSalary(userId, salary); out.println("Salary updated."); }
-        catch (Exception e) { out.println("Error: " + e.getMessage()); }
+        try {
+            services.getEmployeeService().updateSalary(userId, salary);
+            out.println(String.format("Salary updated to %.2f EUR.", salary));
+        } catch (Exception e) { out.println("Error: " + e.getMessage()); }
     }
 
     private void handleManageProducts() throws IOException {
@@ -588,7 +634,11 @@ public class ClientHandler implements Runnable {
                 } catch (Exception e) { out.println("Error: " + e.getMessage()); }
             }
             case "2" -> {
-                out.println("Product ID:");
+                List<Product> activeProducts = services.getProductService().getAllActiveProducts();
+                if (activeProducts.isEmpty()) { out.println("No active products."); return; }
+                out.println("ACTIVE PRODUCTS:");
+                activeProducts.forEach(p -> out.println(String.format("[%d] %s — %.2f EUR", p.getId(), p.getName(), p.getPrice())));
+                out.println("Enter product ID to deactivate:");
                 Long pid = readLong();
                 if (pid == null) return;
                 try { services.getProductService().deactivateProduct(pid); out.println("Product deactivated."); }
@@ -613,20 +663,30 @@ public class ClientHandler implements Runnable {
                 else all.forEach(i -> out.println(i));
             }
             case "2" -> {
-                out.println("Ingredient ID:");
+                List<Ingredient> allIngredients = services.getIngredientService().getAllIngredients();
+                if (allIngredients.isEmpty()) { out.println("No ingredients found."); return; }
+                out.println("\nINGREDIENTS:");
+                allIngredients.forEach(i -> out.println(i));
+                out.println("\nEnter ingredient ID to restock:");
                 Long id = readLong();
                 if (id == null) return;
                 out.println("Amount to add:");
                 BigDecimal amount = readBigDecimal();
                 if (amount == null) return;
-                try { services.getIngredientService().restock(id, amount); out.println("Restocked."); }
-                catch (Exception e) { out.println("Error: " + e.getMessage()); }
+                try {
+                    services.getIngredientService().restock(id, amount);
+                    out.println("Restocked successfully. Products with all ingredients available have been reactivated.");
+                } catch (Exception e) { out.println("Error: " + e.getMessage()); }
             }
             case "3" -> {
-                out.println("Ingredient ID:");
+                List<Ingredient> allIngredients2 = services.getIngredientService().getAllIngredients();
+                if (allIngredients2.isEmpty()) { out.println("No ingredients found."); return; }
+                out.println("\nINGREDIENTS:");
+                allIngredients2.forEach(i -> out.println(i));
+                out.println("\nEnter ingredient ID:");
                 Long id = readLong();
                 if (id == null) return;
-                out.println("New minimum stock:");
+                out.println("New minimum stock level:");
                 BigDecimal min = readBigDecimal();
                 if (min == null) return;
                 try { services.getIngredientService().setMinimumStock(id, min); out.println("Minimum stock updated."); }
