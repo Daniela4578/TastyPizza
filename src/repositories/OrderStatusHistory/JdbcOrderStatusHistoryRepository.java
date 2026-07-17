@@ -18,17 +18,13 @@ public class JdbcOrderStatusHistoryRepository implements OrderStatusHistoryRepos
 
     @Override
     public List<OrderStatusHistory> findByOrderId(Long orderId) {
-        String sql = "SELECT * FROM order_status_history " +
-                "WHERE order_id = ? ORDER BY changed_at ASC";
-
+        String sql = "SELECT * FROM order_status_history WHERE order_id = ? ORDER BY changed_at ASC";
         List<OrderStatusHistory> history = new ArrayList<>();
 
         try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
             stmt.setLong(1, orderId);
             try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    history.add(mapRow(rs));
-                }
+                while (rs.next()) history.add(mapRow(rs));
             }
         } catch (SQLException e) {
             throw new RuntimeException("Failed to load status history for order: " + orderId, e);
@@ -37,12 +33,8 @@ public class JdbcOrderStatusHistoryRepository implements OrderStatusHistoryRepos
     }
 
     private OrderStatusHistory mapRow(ResultSet rs) throws SQLException {
-        // old_status can be NULL for the very first entry
         String oldStatusStr = rs.getString("old_status");
-        OrderStatus oldStatus = oldStatusStr != null
-                ? OrderStatus.valueOf(oldStatusStr)
-                : null;
-
+        OrderStatus oldStatus = oldStatusStr != null ? OrderStatus.valueOf(oldStatusStr) : null;
         Timestamp changedAt = rs.getTimestamp("changed_at");
 
         return OrderStatusHistory.builder()
@@ -50,7 +42,6 @@ public class JdbcOrderStatusHistoryRepository implements OrderStatusHistoryRepos
                 .orderId(rs.getLong("order_id"))
                 .oldStatus(oldStatus)
                 .newStatus(OrderStatus.valueOf(rs.getString("new_status")))
-                .changedBy(rs.getObject("changed_by") != null ? rs.getLong("changed_by") : null)
                 .changedAt(changedAt != null ? changedAt.toLocalDateTime() : null)
                 .build();
     }

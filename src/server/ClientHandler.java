@@ -93,13 +93,15 @@ public class ClientHandler implements Runnable {
                                 case "1"  -> handleViewPendingEmployees();
                                 case "2"  -> handleApproveEmployee();
                                 case "3"  -> handleFireEmployee();
-                                case "4"  -> handleAssignShift();
-                                case "5"  -> handleViewTodaysShifts();
-                                case "6"  -> handleUpdateSalary();
-                                case "7"  -> handleManageProducts();
-                                case "8"  -> handleManageStock();
-                                case "9"  -> handleViewAllOrders();
-                                case "10" -> { out.println("Logged out."); loggedInUser = null; }
+                                case "4"  -> handleViewAllEmployees();
+                                case "5"  -> handleAssignShift();
+                                case "6"  -> handleRemoveShift();
+                                case "7"  -> handleViewTodaysShifts();
+                                case "8"  -> handleUpdateSalary();
+                                case "9"  -> handleManageProducts();
+                                case "10" -> handleManageStock();
+                                case "11" -> handleViewAllOrders();
+                                case "12" -> { out.println("Logged out."); loggedInUser = null; }
                                 default   -> out.println("Invalid choice.");
                             }
                         }
@@ -151,13 +153,15 @@ public class ClientHandler implements Runnable {
         out.println("1  - View pending employees");
         out.println("2  - Approve employee");
         out.println("3  - Fire employee");
-        out.println("4  - Assign shift");
-        out.println("5  - Today's shifts");
-        out.println("6  - Update salary");
-        out.println("7  - Manage products");
-        out.println("8  - Manage stock");
-        out.println("9  - View all orders");
-        out.println("10 - Logout");
+        out.println("4  - View all employees");
+        out.println("5  - Assign shift");
+        out.println("6  - Remove shift");
+        out.println("7  - Today's shifts");
+        out.println("8  - Update salary");
+        out.println("9  - Manage products");
+        out.println("10 - Manage stock");
+        out.println("11 - View all orders");
+        out.println("12 - Logout");
         out.println("Choose:");
     }
 
@@ -289,9 +293,10 @@ public class ClientHandler implements Runnable {
             if (catIdx < 0 || catIdx >= categories.size()) { out.println("Invalid."); continue; }
 
             List<Product> products = services.getProductService().getProductsByCategory(categories.get(catIdx).getId());
+            if (products.isEmpty()) { out.println("No products available in this category."); continue; }
             out.println("\nProducts:");
             for (int i = 0; i < products.size(); i++)
-                out.println((i + 1) + " - " + products.get(i).getName() + " - " + products.get(i).getPrice() + " BGN");
+                out.println((i + 1) + " - " + products.get(i).getName() + " - " + products.get(i).getPrice() + " EUR");
             out.println("0 - Back");
             out.println("Choose:");
 
@@ -341,7 +346,7 @@ public class ClientHandler implements Runnable {
                     .specialInstructions(instructions).build();
             cart.add(newItem);
             BigDecimal cartTotal = cart.stream().map(OrderItem::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
-            out.println(String.format("Added. Cart: %d item(s) | %.2f BGN + %.2f delivery = %.2f BGN total",
+            out.println(String.format("Added. Cart: %d item(s) | %.2f EUR + %.2f delivery = %.2f EUR total",
                     cart.size(), cartTotal, DELIVERY_FEE, cartTotal.add(DELIVERY_FEE)));
         }
 
@@ -440,13 +445,33 @@ public class ClientHandler implements Runnable {
     private void handleMyAddresses(User customer) throws IOException {
         List<Address> addresses = services.getAddressService().getAddresses(customer.getId());
         out.println("\nMY ADDRESSES:");
-        if (addresses.isEmpty()) out.println("No addresses saved.");
-        else addresses.forEach(a -> out.println(a));
+        if (addresses.isEmpty()) {
+            out.println("No addresses saved.");
+        } else {
+            for (int i = 0; i < addresses.size(); i++)
+                out.println(String.format("[%d] %s", i + 1, addresses.get(i).getName()));
+        }
         out.println("\n1 - Add new address");
+        if (!addresses.isEmpty()) out.println("2 - Delete address");
         out.println("0 - Back");
         out.println("Choose:");
         String choice = in.readLine();
-        if ("1".equals(choice != null ? choice.trim() : "")) handleAddNewAddress(customer);
+        if (choice == null) return;
+        switch (choice.trim()) {
+            case "1" -> handleAddNewAddress(customer);
+            case "2" -> {
+                if (addresses.isEmpty()) { out.println("No addresses to delete."); return; }
+                out.println("Enter address number to delete:");
+                int idx;
+                try { idx = Integer.parseInt(in.readLine().trim()) - 1; }
+                catch (NumberFormatException e) { out.println("Invalid."); return; }
+                if (idx < 0 || idx >= addresses.size()) { out.println("Invalid."); return; }
+                try {
+                    services.getAddressService().deleteAddress(addresses.get(idx).getId(), customer.getId());
+                    out.println("Address deleted.");
+                } catch (Exception e) { out.println("Error: " + e.getMessage()); }
+            }
+        }
     }
 
     private Address handleAddNewAddress(User customer) throws IOException {
@@ -635,6 +660,45 @@ public class ClientHandler implements Runnable {
         } catch (Exception e) { out.println("Error: " + e.getMessage()); }
     }
 
+    private void handleViewAllEmployees() {
+        List<User> active = services.getEmployeeService().getActiveEmployees();
+        if (active.isEmpty()) { out.println("\nNo active employees."); return; }
+        out.println("\nALL ACTIVE EMPLOYEES:");
+        for (User u : active) {
+            services.getEmployeeService().getEmployeeDetails(u.getId()).ifPresentOrElse(
+                    d -> out.println(String.format("[%d] %s | Salary: %.2f EUR | Hired: %s",
+                            u.getId(), u.getFullName(), d.getSalary(), d.getHireDate())),
+                    () -> out.println(String.format("[%d] %s | No details on file", u.getId(), u.getFullName()))
+            );
+        }
+    }
+
+    private void handleRemoveShift() throws IOException {
+        out.println("\nREMOVE SHIFT:");
+        List<User> active = services.getEmployeeService().getActiveEmployees();
+        if (active.isEmpty()) { out.println("No active employees."); return; }
+        out.println("EMPLOYEES:");
+        active.forEach(u -> out.println(String.format("[%d] %s", u.getId(), u.getFullName())));
+
+        out.println("Enter employee user ID:");
+        Long employeeId = readLong();
+        if (employeeId == null) return;
+
+        List<objects.Shift> shifts = services.getEmployeeService().getShiftsForEmployee(employeeId);
+        if (shifts.isEmpty()) { out.println("No shifts found for this employee."); return; }
+        out.println("SHIFTS:");
+        shifts.forEach(s -> out.println(String.format("[%d] %s", s.getId(), s)));
+
+        out.println("Enter shift ID to remove:");
+        Long shiftId = readLong();
+        if (shiftId == null) return;
+
+        try {
+            services.getEmployeeService().removeShift(shiftId);
+            out.println("Shift removed.");
+        } catch (Exception e) { out.println("Error: " + e.getMessage()); }
+    }
+
     private void handleViewTodaysShifts() {
         List<Shift> shifts = services.getEmployeeService().getTodaysShifts();
         if (shifts.isEmpty()) { out.println("\nNo shifts today."); return; }
@@ -655,14 +719,14 @@ public class ClientHandler implements Runnable {
 
         // show current salary so manager knows what they are changing from
         services.getEmployeeService().getEmployeeDetails(userId).ifPresent(d ->
-                out.println(String.format("Current salary: %.2f BGN", d.getSalary())));
+                out.println(String.format("Current salary: %.2f EUR", d.getSalary())));
 
         out.println("New salary:");
         BigDecimal salary = readBigDecimal();
         if (salary == null) return;
         try {
             services.getEmployeeService().updateSalary(userId, salary);
-            out.println(String.format("Salary updated to %.2f BGN.", salary));
+            out.println(String.format("Salary updated to %.2f EUR.", salary));
         } catch (Exception e) { out.println("Error: " + e.getMessage()); }
     }
 
@@ -700,7 +764,7 @@ public class ClientHandler implements Runnable {
                 List<Product> activeProducts = services.getProductService().getAllActiveProducts();
                 if (activeProducts.isEmpty()) { out.println("No active products."); return; }
                 out.println("ACTIVE PRODUCTS:");
-                activeProducts.forEach(p -> out.println(String.format("[%d] %s — %.2f BGN", p.getId(), p.getName(), p.getPrice())));
+                activeProducts.forEach(p -> out.println(String.format("[%d] %s — %.2f EUR", p.getId(), p.getName(), p.getPrice())));
                 out.println("Enter product ID to deactivate:");
                 Long pid = readLong();
                 if (pid == null) return;
