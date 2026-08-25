@@ -10,17 +10,11 @@ import java.util.List;
 
 public class JdbcShiftRepository implements ShiftRepository {
 
-    private final DatabaseConnection databaseConnection;
-
-    public JdbcShiftRepository(DatabaseConnection databaseConnection) {
-        this.databaseConnection = databaseConnection;
-    }
-
     @Override
     public Shift save(Shift shift) {
         String sql = "INSERT INTO shifts(employee_id, shift_date, start_time, end_time) VALUES (?, ?, ?, ?)";
-        try (PreparedStatement stmt = databaseConnection.getConnection()
-                .prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setLong(1, shift.getEmployeeId());
             stmt.setDate(2, Date.valueOf(shift.getShiftDate()));
             stmt.setTime(3, Time.valueOf(shift.getStartTime()));
@@ -58,7 +52,8 @@ public class JdbcShiftRepository implements ShiftRepository {
                 "JOIN users u ON u.id = s.employee_id " +
                 "WHERE s.shift_date = ? ORDER BY s.start_time";
         List<Shift> shifts = new ArrayList<>();
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setDate(1, Date.valueOf(date));
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) shifts.add(mapRow(rs));
@@ -72,7 +67,8 @@ public class JdbcShiftRepository implements ShiftRepository {
     @Override
     public void deleteById(Long shiftId) {
         String sql = "DELETE FROM shifts WHERE id = ?";
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setLong(1, shiftId);
             stmt.executeUpdate();
         } catch (SQLException e) {
@@ -82,7 +78,8 @@ public class JdbcShiftRepository implements ShiftRepository {
 
     private List<Shift> query(String sql, Long param) {
         List<Shift> shifts = new ArrayList<>();
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setLong(1, param);
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) shifts.add(mapRow(rs));

@@ -12,19 +12,13 @@ import java.util.Optional;
 
 public class JdbcUserRepository implements UserRepository {
 
-    private final DatabaseConnection databaseConnection;
-
-    public JdbcUserRepository(DatabaseConnection databaseConnection) {
-        this.databaseConnection = databaseConnection;
-    }
-
     @Override
     public User save(User user) {
         String sql = "INSERT INTO users(email, password_hash, first_name, last_name, " +
                 "phone, role, status, date_of_birth) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
-        try (PreparedStatement stmt = databaseConnection.getConnection()
-                .prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
             stmt.setString(1, user.getEmail());
             stmt.setString(2, user.getPasswordHash());
@@ -60,7 +54,8 @@ public class JdbcUserRepository implements UserRepository {
     @Override
     public Optional<User> findByEmail(String email) {
         String sql = "SELECT * FROM users WHERE email = ?";
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, email);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) return Optional.of(mapRow(rs));
@@ -74,7 +69,8 @@ public class JdbcUserRepository implements UserRepository {
     @Override
     public Optional<User> findById(Long id) {
         String sql = "SELECT * FROM users WHERE id = ?";
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setLong(1, id);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) return Optional.of(mapRow(rs));
@@ -89,7 +85,8 @@ public class JdbcUserRepository implements UserRepository {
     public List<User> findByStatus(AccountStatus status) {
         String sql = "SELECT * FROM users WHERE status = ? ORDER BY created_at";
         List<User> users = new ArrayList<>();
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, status.name());
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) users.add(mapRow(rs));
@@ -103,7 +100,8 @@ public class JdbcUserRepository implements UserRepository {
     @Override
     public void updateStatus(Long userId, AccountStatus status) {
         String sql = "UPDATE users SET status = ? WHERE id = ?";
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, status.name());
             stmt.setLong(2, userId);
             stmt.executeUpdate();

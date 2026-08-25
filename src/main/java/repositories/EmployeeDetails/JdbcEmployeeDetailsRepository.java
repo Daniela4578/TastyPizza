@@ -4,31 +4,22 @@ import db.DatabaseConnection;
 import objects.EmployeeDetails;
 
 import java.math.BigDecimal;
-import java.sql.Date;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 public class JdbcEmployeeDetailsRepository implements EmployeeDetailsRepository {
-    private final DatabaseConnection databaseConnection;
-
-    public JdbcEmployeeDetailsRepository(DatabaseConnection databaseConnection) {
-        this.databaseConnection = databaseConnection;
-    }
 
     @Override
     public EmployeeDetails save(EmployeeDetails details) {
         String sql = "INSERT INTO employee_details(user_id, salary, hire_date) VALUES (?, ?, ?)";
-        try (PreparedStatement statement = databaseConnection.getConnection().prepareStatement(sql)) {
-            statement.setLong(1, details.getUserId());
-            statement.setBigDecimal(2, details.getSalary());
-            statement.setDate(3, Date.valueOf(details.getHireDate()));
-
-            statement.executeUpdate();
-
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setLong(1, details.getUserId());
+            stmt.setBigDecimal(2, details.getSalary());
+            stmt.setDate(3, Date.valueOf(details.getHireDate()));
+            stmt.executeUpdate();
             return details;
         } catch (SQLException e) {
             throw new RuntimeException("Failed to save employee details for user: " + details.getUserId(), e);
@@ -38,9 +29,10 @@ public class JdbcEmployeeDetailsRepository implements EmployeeDetailsRepository 
     @Override
     public Optional<EmployeeDetails> findByUserId(Long userId) {
         String sql = "SELECT * FROM employee_details WHERE user_id = ?";
-        try (PreparedStatement statement = databaseConnection.getConnection().prepareStatement(sql)) {
-            statement.setLong(1, userId);
-            try (ResultSet rs = statement.executeQuery()) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setLong(1, userId);
+            try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) return Optional.of(mapRow(rs));
             }
         } catch (SQLException e) {
@@ -53,8 +45,9 @@ public class JdbcEmployeeDetailsRepository implements EmployeeDetailsRepository 
     public List<EmployeeDetails> findAll() {
         String sql = "SELECT * FROM employee_details";
         List<EmployeeDetails> list = new ArrayList<>();
-        try (PreparedStatement statement = databaseConnection.getConnection().prepareStatement(sql);
-             ResultSet rs = statement.executeQuery()) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
             while (rs.next()) list.add(mapRow(rs));
         } catch (SQLException e) {
             throw new RuntimeException("Failed to load all employee details", e);
@@ -65,12 +58,11 @@ public class JdbcEmployeeDetailsRepository implements EmployeeDetailsRepository 
     @Override
     public void updateSalary(Long userId, BigDecimal newSalary) {
         String sql = "UPDATE employee_details SET salary = ? WHERE user_id = ?";
-        try (PreparedStatement statement = databaseConnection.getConnection().prepareStatement(sql)) {
-            statement.setBigDecimal(1, newSalary);
-            statement.setLong(2, userId);
-
-            statement.executeUpdate();
-
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setBigDecimal(1, newSalary);
+            stmt.setLong(2, userId);
+            stmt.executeUpdate();
         } catch (SQLException e) {
             throw new RuntimeException("Failed to update salary for user: " + userId, e);
         }

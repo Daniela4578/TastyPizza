@@ -9,17 +9,12 @@ import java.util.List;
 
 public class JdbcCategoryRepository implements CategoryRepository {
 
-    private final DatabaseConnection databaseConnection;
-
-    public JdbcCategoryRepository(DatabaseConnection databaseConnection) {
-        this.databaseConnection = databaseConnection;
-    }
-
     @Override
     public List<Category> findAll() {
         String sql = "SELECT * FROM categories ORDER BY name";
         List<Category> list = new ArrayList<>();
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql);
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
             while (rs.next()) {
                 list.add(Category.builder()

@@ -10,18 +10,12 @@ import java.util.List;
 
 public class JdbcOrderStatusHistoryRepository implements OrderStatusHistoryRepository {
 
-    private final DatabaseConnection databaseConnection;
-
-    public JdbcOrderStatusHistoryRepository(DatabaseConnection databaseConnection) {
-        this.databaseConnection = databaseConnection;
-    }
-
     @Override
     public List<OrderStatusHistory> findByOrderId(Long orderId) {
         String sql = "SELECT * FROM order_status_history WHERE order_id = ? ORDER BY changed_at ASC";
         List<OrderStatusHistory> history = new ArrayList<>();
-
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setLong(1, orderId);
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) history.add(mapRow(rs));

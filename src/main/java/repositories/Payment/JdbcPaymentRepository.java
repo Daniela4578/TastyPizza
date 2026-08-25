@@ -10,25 +10,16 @@ import java.util.Optional;
 
 public class JdbcPaymentRepository implements PaymentRepository {
 
-    private final DatabaseConnection databaseConnection;
-
-    public JdbcPaymentRepository(DatabaseConnection databaseConnection) {
-        this.databaseConnection = databaseConnection;
-    }
-
     @Override
     public Payment save(Payment payment) {
         String sql = "INSERT INTO payments(order_id, method, status, amount) VALUES (?, ?, ?, ?)";
-
-        try (PreparedStatement stmt = databaseConnection.getConnection()
-                .prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setLong(1, payment.getOrderId());
             stmt.setString(2, payment.getMethod().name());
             stmt.setString(3, payment.getStatus().name());
             stmt.setBigDecimal(4, payment.getAmount());
             stmt.executeUpdate();
-
             try (ResultSet keys = stmt.getGeneratedKeys()) {
                 if (keys.next()) {
                     return Payment.builder()
@@ -49,8 +40,8 @@ public class JdbcPaymentRepository implements PaymentRepository {
     @Override
     public Optional<Payment> findByOrderId(Long orderId) {
         String sql = "SELECT * FROM payments WHERE order_id = ?";
-
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setLong(1, orderId);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) return Optional.of(mapRow(rs));
@@ -64,10 +55,9 @@ public class JdbcPaymentRepository implements PaymentRepository {
     @Override
     public void updateStatus(Long orderId, PaymentStatus status) {
         String sql = "UPDATE payments SET status = ?, paid_at = ? WHERE order_id = ?";
-
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, status.name());
-            // set paid_at to now only when completing, null otherwise
             if (status == PaymentStatus.COMPLETED) {
                 stmt.setTimestamp(2, Timestamp.valueOf(java.time.LocalDateTime.now()));
             } else {

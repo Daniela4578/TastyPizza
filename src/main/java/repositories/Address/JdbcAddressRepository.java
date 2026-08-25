@@ -10,17 +10,11 @@ import java.util.Optional;
 
 public class JdbcAddressRepository implements AddressRepository {
 
-    private final DatabaseConnection databaseConnection;
-
-    public JdbcAddressRepository(DatabaseConnection databaseConnection) {
-        this.databaseConnection = databaseConnection;
-    }
-
     @Override
     public Address save(Address address) {
         String sql = "INSERT INTO addresses(user_id, name, latitude, longitude) VALUES (?, ?, ?, ?)";
-        try (PreparedStatement stmt = databaseConnection.getConnection()
-                .prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setLong(1, address.getUserId());
             stmt.setString(2, address.getName());
             stmt.setDouble(3, address.getLatitude());
@@ -47,7 +41,8 @@ public class JdbcAddressRepository implements AddressRepository {
     public List<Address> findByUserId(Long userId) {
         String sql = "SELECT * FROM addresses WHERE user_id = ?";
         List<Address> list = new ArrayList<>();
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setLong(1, userId);
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) list.add(mapRow(rs));
@@ -61,7 +56,8 @@ public class JdbcAddressRepository implements AddressRepository {
     @Override
     public Optional<Address> findById(Long id) {
         String sql = "SELECT * FROM addresses WHERE id = ?";
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setLong(1, id);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) return Optional.of(mapRow(rs));
@@ -75,7 +71,8 @@ public class JdbcAddressRepository implements AddressRepository {
     @Override
     public void deleteById(Long id) {
         String sql = "DELETE FROM addresses WHERE id = ?";
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setLong(1, id);
             stmt.executeUpdate();
         } catch (SQLException e) {

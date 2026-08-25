@@ -11,12 +11,6 @@ import java.util.Optional;
 
 public class JdbcProductRepository implements ProductRepository {
 
-    private final DatabaseConnection databaseConnection;
-
-    public JdbcProductRepository(DatabaseConnection databaseConnection) {
-        this.databaseConnection = databaseConnection;
-    }
-
     @Override
     public List<Product> findAllActive() {
         String sql = "SELECT p.*, c.name AS category_name FROM products p " +
@@ -37,7 +31,8 @@ public class JdbcProductRepository implements ProductRepository {
     public Optional<Product> findById(Long id) {
         String sql = "SELECT p.*, c.name AS category_name FROM products p " +
                 "JOIN categories c ON c.id = p.category_id WHERE p.id = ?";
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setLong(1, id);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) return Optional.of(mapRow(rs));
@@ -52,7 +47,8 @@ public class JdbcProductRepository implements ProductRepository {
     public List<ProductSize> findSizesByProductId(Long productId) {
         String sql = "SELECT * FROM product_sizes WHERE product_id = ? ORDER BY price";
         List<ProductSize> sizes = new ArrayList<>();
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setLong(1, productId);
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -72,8 +68,8 @@ public class JdbcProductRepository implements ProductRepository {
     @Override
     public Product save(Product product) {
         String sql = "INSERT INTO products(name, description, price, base_grammage, category_id, is_active) VALUES (?, ?, ?, ?, ?, ?)";
-        try (PreparedStatement stmt = databaseConnection.getConnection()
-                .prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setString(1, product.getName());
             stmt.setString(2, product.getDescription());
             stmt.setBigDecimal(3, product.getPrice());
@@ -99,7 +95,8 @@ public class JdbcProductRepository implements ProductRepository {
     @Override
     public void setActive(Long id, boolean active) {
         String sql = "UPDATE products SET is_active = ? WHERE id = ?";
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setBoolean(1, active);
             stmt.setLong(2, id);
             stmt.executeUpdate();
@@ -119,7 +116,8 @@ public class JdbcProductRepository implements ProductRepository {
 
     private List<Product> queryProducts(String sql, Long param) {
         List<Product> list = new ArrayList<>();
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             if (param != null) stmt.setLong(1, param);
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) list.add(mapRow(rs));

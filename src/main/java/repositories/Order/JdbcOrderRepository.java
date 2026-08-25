@@ -12,64 +12,57 @@ import java.util.Optional;
 
 public class JdbcOrderRepository implements OrderRepository {
 
-    private final DatabaseConnection databaseConnection;
-
-    public JdbcOrderRepository(DatabaseConnection databaseConnection) {
-        this.databaseConnection = databaseConnection;
-    }
-
     @Override
     public Order save(Order order) {
         String orderSql = "INSERT INTO orders(customer_id, address_id, status, delivery_fee, total_price) VALUES (?, ?, ?, ?, ?)";
         String itemSql  = "INSERT INTO order_items(order_id, product_id, product_size_id, quantity, unit_price, special_instructions) VALUES (?, ?, ?, ?, ?, ?)";
-        Connection conn = databaseConnection.getConnection();
 
-        try {
+        try (Connection conn = DatabaseConnection.getConnection()) {
             conn.setAutoCommit(false);
-            Long orderId;
+            try {
+                Long orderId;
 
-            try (PreparedStatement stmt = conn.prepareStatement(orderSql, Statement.RETURN_GENERATED_KEYS)) {
-                stmt.setLong(1, order.getCustomerId());
-                stmt.setLong(2, order.getAddressId());
-                stmt.setString(3, order.getStatus().name());
-                stmt.setBigDecimal(4, order.getDeliveryFee());
-                stmt.setBigDecimal(5, order.getTotalPrice());
-                stmt.executeUpdate();
-                try (ResultSet keys = stmt.getGeneratedKeys()) {
-                    if (!keys.next()) throw new SQLException("Failed to get generated order ID");
-                    orderId = keys.getLong(1);
-                }
-            }
-
-            for (OrderItem item : order.getItems()) {
-                try (PreparedStatement stmt = conn.prepareStatement(itemSql)) {
-                    stmt.setLong(1, orderId);
-                    stmt.setLong(2, item.getProductId());
-                    if (item.getProductSizeId() != null) stmt.setLong(3, item.getProductSizeId());
-                    else stmt.setNull(3, Types.BIGINT);
-                    stmt.setInt(4, item.getQuantity());
-                    stmt.setBigDecimal(5, item.getUnitPrice());
-                    stmt.setString(6, item.getSpecialInstructions());
+                try (PreparedStatement stmt = conn.prepareStatement(orderSql, Statement.RETURN_GENERATED_KEYS)) {
+                    stmt.setLong(1, order.getCustomerId());
+                    stmt.setLong(2, order.getAddressId());
+                    stmt.setString(3, order.getStatus().name());
+                    stmt.setBigDecimal(4, order.getDeliveryFee());
+                    stmt.setBigDecimal(5, order.getTotalPrice());
                     stmt.executeUpdate();
+                    try (ResultSet keys = stmt.getGeneratedKeys()) {
+                        if (!keys.next()) throw new SQLException("Failed to get generated order ID");
+                        orderId = keys.getLong(1);
+                    }
                 }
+
+                for (OrderItem item : order.getItems()) {
+                    try (PreparedStatement stmt = conn.prepareStatement(itemSql)) {
+                        stmt.setLong(1, orderId);
+                        stmt.setLong(2, item.getProductId());
+                        if (item.getProductSizeId() != null) stmt.setLong(3, item.getProductSizeId());
+                        else stmt.setNull(3, Types.BIGINT);
+                        stmt.setInt(4, item.getQuantity());
+                        stmt.setBigDecimal(5, item.getUnitPrice());
+                        stmt.setString(6, item.getSpecialInstructions());
+                        stmt.executeUpdate();
+                    }
+                }
+
+                conn.commit();
+                return Order.builder()
+                        .id(orderId).customerId(order.getCustomerId())
+                        .addressId(order.getAddressId()).status(order.getStatus())
+                        .deliveryFee(order.getDeliveryFee()).totalPrice(order.getTotalPrice())
+                        .items(order.getItems()).build();
+
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
             }
-
-            conn.commit();
-            return Order.builder()
-                    .id(orderId)
-                    .customerId(order.getCustomerId())
-                    .addressId(order.getAddressId())
-                    .status(order.getStatus())
-                    .deliveryFee(order.getDeliveryFee())
-                    .totalPrice(order.getTotalPrice())
-                    .items(order.getItems())
-                    .build();
-
         } catch (SQLException e) {
-            try { conn.rollback(); } catch (SQLException ignored) {}
             throw new RuntimeException("Failed to save order", e);
-        } finally {
-            try { conn.setAutoCommit(true); } catch (SQLException ignored) {}
         }
     }
 
@@ -78,7 +71,8 @@ public class JdbcOrderRepository implements OrderRepository {
         String sql = "SELECT o.*, u.first_name, u.last_name, a.name AS address_name " +
                 "FROM orders o JOIN users u ON u.id = o.customer_id " +
                 "JOIN addresses a ON a.id = o.address_id WHERE o.id = ?";
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setLong(1, id);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
@@ -116,7 +110,8 @@ public class JdbcOrderRepository implements OrderRepository {
                 "JOIN addresses a ON a.id = o.address_id " +
                 "WHERE o.status = ? ORDER BY o.created_at ASC";
         List<Order> orders = new ArrayList<>();
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, status.name());
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) orders.add(mapRow(rs));
@@ -130,7 +125,8 @@ public class JdbcOrderRepository implements OrderRepository {
     @Override
     public void updateStatus(Long orderId, OrderStatus status, Long processedBy, Integer estimatedMinutes) {
         String sql = "UPDATE orders SET status = ?, processed_by = ?, estimated_delivery = ?, updated_at = NOW() WHERE id = ?";
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, status.name());
             if (processedBy != null) stmt.setLong(2, processedBy);
             else stmt.setNull(2, Types.BIGINT);
@@ -145,7 +141,8 @@ public class JdbcOrderRepository implements OrderRepository {
 
     private List<Order> queryOrders(String sql, Long param) {
         List<Order> orders = new ArrayList<>();
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setLong(1, param);
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) orders.add(mapRow(rs));
@@ -161,7 +158,8 @@ public class JdbcOrderRepository implements OrderRepository {
                 "FROM order_items oi JOIN products p ON p.id = oi.product_id " +
                 "LEFT JOIN product_sizes ps ON ps.id = oi.product_size_id WHERE oi.order_id = ?";
         List<OrderItem> items = new ArrayList<>();
-        try (PreparedStatement stmt = databaseConnection.getConnection().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setLong(1, orderId);
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
