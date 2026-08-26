@@ -2,26 +2,36 @@ package services;
 
 import objects.Ingredient;
 import objects.Product;
-import repositories.Ingredient.IngredientQuantity;
-import repositories.Ingredient.IngredientRepository;
+import repositories.IngredientQuantity;
+import repositories.interfaces.IngredientRepository;
+import services.interfaces.IIngredientService;
+import services.interfaces.IProductService;
 
 import java.math.BigDecimal;
 import java.util.List;
 
-public class IngredientService {
+public class IngredientService implements IIngredientService {
 
     private final IngredientRepository ingredientRepository;
-    private final ProductService       productService;
+    private final IProductService productService;
 
     public IngredientService(IngredientRepository ingredientRepository,
-                             ProductService productService) {
+                             IProductService productService) {
         this.ingredientRepository = ingredientRepository;
-        this.productService       = productService;
+        this.productService = productService;
     }
 
-    public List<Ingredient> getAllIngredients()    { return ingredientRepository.findAll(); }
-    public List<Ingredient> getLowStockIngredients(){ return ingredientRepository.findLowStock(); }
+    @Override
+    public List<Ingredient> getAllIngredients() {
+        return ingredientRepository.findAll();
+    }
 
+    @Override
+    public List<Ingredient> getLowStockIngredients() {
+        return ingredientRepository.findLowStock();
+    }
+
+    @Override
     public void restock(Long ingredientId, BigDecimal amountToAdd) {
         if (amountToAdd == null || amountToAdd.compareTo(BigDecimal.ZERO) <= 0)
             throw new IllegalArgumentException("Amount must be greater than zero");
@@ -29,12 +39,13 @@ public class IngredientService {
         Ingredient ingredient = ingredientRepository.findById(ingredientId).orElseThrow(() ->
                 new IllegalArgumentException("Ingredient not found: " + ingredientId));
 
-        BigDecimal newQuantity = ingredient.getStockQuantity().add(amountToAdd);
-        ingredientRepository.updateStock(ingredientId, newQuantity);
+        ingredientRepository.updateStock(ingredientId,
+                ingredient.getStockQuantity().add(amountToAdd));
 
         reactivateProductsIfPossible(ingredientId);
     }
 
+    @Override
     public void setMinimumStock(Long ingredientId, BigDecimal minimum) {
         if (minimum == null || minimum.compareTo(BigDecimal.ZERO) < 0)
             throw new IllegalArgumentException("Minimum stock cannot be negative");
@@ -43,12 +54,13 @@ public class IngredientService {
         ingredientRepository.updateMinimumStock(ingredientId, minimum);
     }
 
+    @Override
     public void deductStockForProduct(Long productId, int quantity) {
         List<IngredientQuantity> recipe = ingredientRepository.findByProductId(productId);
 
         for (IngredientQuantity iq : recipe) {
             ingredientRepository.findById(iq.getIngredientId()).ifPresent(ingredient -> {
-                BigDecimal deduct   = iq.getStandardQuantity().multiply(BigDecimal.valueOf(quantity));
+                BigDecimal deduct = iq.getStandardQuantity().multiply(BigDecimal.valueOf(quantity));
                 BigDecimal newStock = ingredient.getStockQuantity().subtract(deduct);
                 if (newStock.compareTo(BigDecimal.ZERO) < 0) newStock = BigDecimal.ZERO;
                 ingredientRepository.updateStock(ingredient.getId(), newStock);
@@ -76,9 +88,7 @@ public class IngredientService {
                             .map(ing -> ing.getStockQuantity().compareTo(BigDecimal.ZERO) > 0)
                             .orElse(false));
 
-            if (allInStock) {
-                productService.activateProduct(product.getId());
-            }
+            if (allInStock) productService.activateProduct(product.getId());
         }
     }
 }

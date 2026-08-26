@@ -1,7 +1,8 @@
-package repositories.Shift;
+package repositories;
 
 import db.DatabaseConnection;
 import objects.Shift;
+import repositories.interfaces.ShiftRepository;
 
 import java.sql.*;
 import java.time.LocalDate;

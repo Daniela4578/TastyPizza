@@ -1,7 +1,8 @@
-package repositories.Address;
+package repositories;
 
 import db.DatabaseConnection;
 import objects.Address;
+import repositories.interfaces.AddressRepository;
 
 import java.sql.*;
 import java.util.ArrayList;

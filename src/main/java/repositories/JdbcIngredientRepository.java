@@ -1,7 +1,8 @@
-package repositories.Ingredient;
+package repositories;
 
 import db.DatabaseConnection;
 import objects.Ingredient;
+import repositories.interfaces.IngredientRepository;
 
 import java.math.BigDecimal;
 import java.sql.*;

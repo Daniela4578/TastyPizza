@@ -1,7 +1,8 @@
-package repositories.EmployeeDetails;
+package repositories;
 
 import db.DatabaseConnection;
 import objects.EmployeeDetails;
+import repositories.interfaces.EmployeeDetailsRepository;
 
 import java.math.BigDecimal;
 import java.sql.*;

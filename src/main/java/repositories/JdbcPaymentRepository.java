@@ -1,9 +1,10 @@
-package repositories.Payment;
+package repositories;
 
 import db.DatabaseConnection;
 import objects.Payment;
 import objects.PaymentMethod;
 import objects.PaymentStatus;
+import repositories.interfaces.PaymentRepository;
 
 import java.sql.*;
 import java.util.Optional;

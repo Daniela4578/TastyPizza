@@ -1,8 +1,9 @@
-package repositories.OrderStatusHistory;
+package repositories;
 
 import db.DatabaseConnection;
 import objects.OrderStatus;
 import objects.OrderStatusHistory;
+import repositories.interfaces.OrderStatusHistoryRepository;
 
 import java.sql.*;
 import java.util.ArrayList;

@@ -1,11 +1,12 @@
 package services;
 
 import objects.OrderStatusHistory;
-import repositories.OrderStatusHistory.OrderStatusHistoryRepository;
+import repositories.interfaces.OrderStatusHistoryRepository;
+import services.interfaces.IOrderHistoryService;
 
 import java.util.List;
 
-public class OrderHistoryService {
+public class OrderHistoryService implements IOrderHistoryService {
 
     private final OrderStatusHistoryRepository historyRepository;
 

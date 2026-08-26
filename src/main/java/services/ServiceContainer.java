@@ -1,40 +1,65 @@
 package services;
 
+import services.interfaces.*;
+
 public class ServiceContainer {
 
-    private final UserService         userService;
-    private final EmployeeService     employeeService;
-    private final AddressService      addressService;
-    private final ProductService      productService;
-    private final OrderService        orderService;
-    private final IngredientService   ingredientService;
-    private final PaymentService      paymentService;
-    private final OrderHistoryService orderHistoryService;
+    private final IUserService userService;
+    private final IEmployeeService employeeService;
+    private final IAddressService addressService;
+    private final IProductService productService;
+    private final IOrderService orderService;
+    private final IIngredientService ingredientService;
+    private final IPaymentService paymentService;
+    private final IOrderHistoryService orderHistoryService;
 
-    public ServiceContainer(UserService         userService,
-                            EmployeeService     employeeService,
-                            AddressService      addressService,
-                            ProductService      productService,
-                            OrderService        orderService,
-                            IngredientService   ingredientService,
-                            PaymentService      paymentService,
-                            OrderHistoryService orderHistoryService) {
-        this.userService         = userService;
-        this.employeeService     = employeeService;
-        this.addressService      = addressService;
-        this.productService      = productService;
-        this.orderService        = orderService;
-        this.ingredientService   = ingredientService;
-        this.paymentService      = paymentService;
+    public ServiceContainer(IUserService userService,
+                            IEmployeeService employeeService,
+                            IAddressService addressService,
+                            IProductService productService,
+                            IOrderService orderService,
+                            IIngredientService ingredientService,
+                            IPaymentService paymentService,
+                            IOrderHistoryService orderHistoryService) {
+        this.userService = userService;
+        this.employeeService = employeeService;
+        this.addressService = addressService;
+        this.productService = productService;
+        this.orderService = orderService;
+        this.ingredientService = ingredientService;
+        this.paymentService = paymentService;
         this.orderHistoryService = orderHistoryService;
     }
 
-    public UserService         getUserService()         { return userService; }
-    public EmployeeService     getEmployeeService()     { return employeeService; }
-    public AddressService      getAddressService()      { return addressService; }
-    public ProductService      getProductService()      { return productService; }
-    public OrderService        getOrderService()        { return orderService; }
-    public IngredientService   getIngredientService()   { return ingredientService; }
-    public PaymentService      getPaymentService()      { return paymentService; }
-    public OrderHistoryService getOrderHistoryService() { return orderHistoryService; }
+    public IUserService getUserService() {
+        return userService;
+    }
+
+    public IEmployeeService getEmployeeService() {
+        return employeeService;
+    }
+
+    public IAddressService getAddressService() {
+        return addressService;
+    }
+
+    public IProductService getProductService() {
+        return productService;
+    }
+
+    public IOrderService getOrderService() {
+        return orderService;
+    }
+
+    public IIngredientService getIngredientService() {
+        return ingredientService;
+    }
+
+    public IPaymentService getPaymentService() {
+        return paymentService;
+    }
+
+    public IOrderHistoryService getOrderHistoryService() {
+        return orderHistoryService;
+    }
 }

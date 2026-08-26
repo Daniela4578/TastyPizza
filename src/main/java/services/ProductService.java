@@ -3,27 +3,39 @@ package services;
 import objects.Category;
 import objects.Product;
 import objects.ProductSize;
-import repositories.Category.CategoryRepository;
-import repositories.Product.ProductRepository;
+import repositories.interfaces.CategoryRepository;
+import repositories.interfaces.ProductRepository;
+import services.interfaces.IProductService;
 
 import java.math.BigDecimal;
 import java.util.List;
 
-public class ProductService {
+public class ProductService implements IProductService {
 
-    private final ProductRepository  productRepository;
+    private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
 
     public ProductService(ProductRepository productRepository,
                           CategoryRepository categoryRepository) {
-        this.productRepository  = productRepository;
+        this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
     }
 
-    public List<Category> getCategories()                    { return categoryRepository.findAll(); }
-    public List<Product>  getAllActiveProducts()              { return productRepository.findAllActive(); }
-    public List<Product>  getProductsByCategory(Long catId)  { return productRepository.findActiveByCategoryId(catId); }
-    public List<ProductSize> getSizesByProduct(Long prodId)  { return productRepository.findSizesByProductId(prodId); }
+    public List<Category> getCategories() {
+        return categoryRepository.findAll();
+    }
+
+    public List<Product> getAllActiveProducts() {
+        return productRepository.findAllActive();
+    }
+
+    public List<Product> getProductsByCategory(Long catId) {
+        return productRepository.findActiveByCategoryId(catId);
+    }
+
+    public List<ProductSize> getSizesByProduct(Long prodId) {
+        return productRepository.findSizesByProductId(prodId);
+    }
 
     public List<Product> getInactiveProductsByIngredient(Long ingredientId) {
         return productRepository.findInactiveByIngredientId(ingredientId);

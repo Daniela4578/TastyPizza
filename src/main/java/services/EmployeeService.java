@@ -2,9 +2,10 @@ package services;
 
 import exceptions.UserNotFoundException;
 import objects.*;
-import repositories.EmployeeDetails.EmployeeDetailsRepository;
-import repositories.Shift.ShiftRepository;
-import repositories.User.UserRepository;
+import repositories.interfaces.EmployeeDetailsRepository;
+import repositories.interfaces.ShiftRepository;
+import repositories.interfaces.UserRepository;
+import services.interfaces.IEmployeeService;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -13,21 +14,19 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-public class EmployeeService {
+public class EmployeeService implements IEmployeeService {
 
     private final EmployeeDetailsRepository employeeDetailsRepository;
-    private final ShiftRepository           shiftRepository;
-    private final UserRepository            userRepository;
+    private final ShiftRepository shiftRepository;
+    private final UserRepository userRepository;
 
     public EmployeeService(EmployeeDetailsRepository employeeDetailsRepository,
                            ShiftRepository shiftRepository,
                            UserRepository userRepository) {
         this.employeeDetailsRepository = employeeDetailsRepository;
-        this.shiftRepository           = shiftRepository;
-        this.userRepository            = userRepository;
+        this.shiftRepository = shiftRepository;
+        this.userRepository = userRepository;
     }
-
-    // ── Employee lists ──────────────────────────────────────────────────────
 
     public List<User> getPendingEmployees() {
         return userRepository.findByStatus(AccountStatus.PENDING);
@@ -42,8 +41,6 @@ public class EmployeeService {
     public Optional<User> findUser(Long userId) {
         return userRepository.findById(userId);
     }
-
-    // ── Approval flow ───────────────────────────────────────────────────────
 
     public EmployeeDetails approveEmployee(Long userId, BigDecimal salary, LocalDate hireDate) {
         if (salary == null || salary.compareTo(BigDecimal.ZERO) < 0)
@@ -70,8 +67,6 @@ public class EmployeeService {
             throw new IllegalArgumentException("User is not an employee");
         userRepository.updateStatus(userId, AccountStatus.FIRED);
     }
-
-    // ── Employee details ────────────────────────────────────────────────────
 
     public Optional<EmployeeDetails> getEmployeeDetails(Long userId) {
         return employeeDetailsRepository.findByUserId(userId);

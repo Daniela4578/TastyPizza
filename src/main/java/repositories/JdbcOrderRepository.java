@@ -1,9 +1,10 @@
-package repositories.Order;
+package repositories;
 
 import db.DatabaseConnection;
 import objects.Order;
 import objects.OrderItem;
 import objects.OrderStatus;
+import repositories.interfaces.OrderRepository;
 
 import java.sql.*;
 import java.util.ArrayList;

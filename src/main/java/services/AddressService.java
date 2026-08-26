@@ -1,11 +1,12 @@
 package services;
 
 import objects.Address;
-import repositories.Address.AddressRepository;
+import repositories.interfaces.AddressRepository;
+import services.interfaces.IAddressService;
 
 import java.util.List;
 
-public class AddressService {
+public class AddressService implements IAddressService {
 
     private final AddressRepository addressRepository;
 

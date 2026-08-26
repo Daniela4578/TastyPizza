@@ -1,7 +1,8 @@
-package repositories.Category;
+package repositories;
 
 import db.DatabaseConnection;
 import objects.Category;
+import repositories.interfaces.CategoryRepository;
 
 import java.sql.*;
 import java.util.ArrayList;

@@ -1,8 +1,9 @@
-package repositories.Product;
+package repositories;
 
 import db.DatabaseConnection;
 import objects.Product;
 import objects.ProductSize;
+import repositories.interfaces.ProductRepository;
 
 import java.sql.*;
 import java.util.ArrayList;

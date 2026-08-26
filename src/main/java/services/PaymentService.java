@@ -3,12 +3,13 @@ package services;
 import objects.Payment;
 import objects.PaymentMethod;
 import objects.PaymentStatus;
-import repositories.Payment.PaymentRepository;
+import repositories.interfaces.PaymentRepository;
+import services.interfaces.IPaymentService;
 
 import java.math.BigDecimal;
 import java.util.Optional;
 
-public class PaymentService {
+public class PaymentService implements IPaymentService {
 
     private final PaymentRepository paymentRepository;
 

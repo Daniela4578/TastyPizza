@@ -1,9 +1,10 @@
-package repositories.User;
+package repositories;
 
 import db.DatabaseConnection;
 import objects.AccountStatus;
 import objects.Role;
 import objects.User;
+import repositories.interfaces.UserRepository;
 
 import java.sql.*;
 import java.util.ArrayList;

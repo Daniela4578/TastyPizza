@@ -67,7 +67,9 @@ public final class DatabaseConnection {
         return props;
     }
 
-    /** Fails fast if any required property is missing. */
+    /**
+     * Fails fast if any required property is missing.
+     */
     private static void validateConfig(Properties props) {
         for (String key : new String[]{"db.url", "db.user", "db.password"}) {
             if (props.getProperty(key) == null || props.getProperty(key).isBlank()) {

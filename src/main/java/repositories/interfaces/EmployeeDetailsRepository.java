@@ -1,4 +1,4 @@
-package repositories.EmployeeDetails;
+package repositories.interfaces;
 
 import objects.EmployeeDetails;
 
@@ -8,7 +8,10 @@ import java.util.Optional;
 
 public interface EmployeeDetailsRepository {
     EmployeeDetails save(EmployeeDetails employee);
+
     Optional<EmployeeDetails> findByUserId(Long userId);
+
     List<EmployeeDetails> findAll();
+
     void updateSalary(Long userId, BigDecimal newSalary);
 }

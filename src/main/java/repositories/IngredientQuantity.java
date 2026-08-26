@@ -1,4 +1,4 @@
-package repositories.Ingredient;
+package repositories;
 
 import java.math.BigDecimal;
 
@@ -7,10 +7,15 @@ public class IngredientQuantity {
     private final BigDecimal standardQuantity;
 
     public IngredientQuantity(Long ingredientId, BigDecimal standardQuantity) {
-        this.ingredientId     = ingredientId;
+        this.ingredientId = ingredientId;
         this.standardQuantity = standardQuantity;
     }
 
-    public Long getIngredientId()          { return ingredientId; }
-    public BigDecimal getStandardQuantity(){ return standardQuantity; }
+    public Long getIngredientId() {
+        return ingredientId;
+    }
+
+    public BigDecimal getStandardQuantity() {
+        return standardQuantity;
+    }
 }

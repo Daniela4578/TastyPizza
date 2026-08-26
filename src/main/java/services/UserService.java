@@ -6,7 +6,8 @@ import exceptions.UserNotFoundException;
 import objects.AccountStatus;
 import objects.Role;
 import objects.User;
-import repositories.User.UserRepository;
+import repositories.interfaces.UserRepository;
+import services.interfaces.IUserService;
 import utilitis.PasswordHasher;
 
 import java.time.LocalDate;
@@ -14,7 +15,7 @@ import java.time.Period;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
-public class UserService {
+public class UserService implements IUserService {
 
     private final UserRepository userRepository;
 
@@ -43,8 +44,8 @@ public class UserService {
             throw new EmailAlreadyExistsException("An account with this email already exists");
         }
 
-        String        passwordHash = PasswordHasher.hash(password);
-        AccountStatus status       = (role == Role.EMPLOYEE)
+        String passwordHash = PasswordHasher.hash(password);
+        AccountStatus status = (role == Role.EMPLOYEE)
                 ? AccountStatus.PENDING
                 : AccountStatus.ACTIVE;
 
@@ -71,10 +72,11 @@ public class UserService {
         User user = result.get();
 
         switch (user.getStatus()) {
-            case PENDING     -> throw new AccountNotActiveException("Your account is pending manager approval.");
+            case PENDING -> throw new AccountNotActiveException("Your account is pending manager approval.");
             case DEACTIVATED -> throw new AccountNotActiveException("This account has been deactivated.");
-            case FIRED       -> throw new AccountNotActiveException("Your employment has been terminated.");
-            default          -> {}
+            case FIRED -> throw new AccountNotActiveException("Your employment has been terminated.");
+            default -> {
+            }
         }
 
         if (!PasswordHasher.verify(password, user.getPasswordHash())) {
