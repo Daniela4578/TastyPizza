@@ -1,5 +1,6 @@
 package services;
 
+import exceptions.PaymentNotFoundException;
 import objects.Payment;
 import objects.PaymentMethod;
 import objects.PaymentStatus;
@@ -17,21 +18,22 @@ public class PaymentService implements IPaymentService {
         this.paymentRepository = paymentRepository;
     }
 
+    @Override
     public Payment createPayment(Long orderId, BigDecimal amount, PaymentMethod method) {
         return paymentRepository.save(Payment.builder()
-                .orderId(orderId)
-                .method(method)
-                .status(PaymentStatus.PENDING)
-                .amount(amount)
+                .orderId(orderId).method(method)
+                .status(PaymentStatus.PENDING).amount(amount)
                 .build());
     }
 
+    @Override
     public void completePayment(Long orderId) {
         paymentRepository.findByOrderId(orderId).orElseThrow(() ->
-                new IllegalArgumentException("No payment found for order: " + orderId));
+                new PaymentNotFoundException("No payment found for order: " + orderId));
         paymentRepository.updateStatus(orderId, PaymentStatus.COMPLETED);
     }
 
+    @Override
     public Optional<Payment> getPaymentForOrder(Long orderId) {
         return paymentRepository.findByOrderId(orderId);
     }

@@ -6,6 +6,7 @@ import repositories.interfaces.EmployeeDetailsRepository;
 import repositories.interfaces.ShiftRepository;
 import repositories.interfaces.UserRepository;
 import services.interfaces.IEmployeeService;
+import utilitis.ArgumentUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -28,23 +29,26 @@ public class EmployeeService implements IEmployeeService {
         this.userRepository = userRepository;
     }
 
+    @Override
     public List<User> getPendingEmployees() {
         return userRepository.findByStatus(AccountStatus.PENDING);
     }
 
+    @Override
     public List<User> getActiveEmployees() {
         return userRepository.findByStatus(AccountStatus.ACTIVE).stream()
                 .filter(u -> u.getRole() == Role.EMPLOYEE)
                 .collect(Collectors.toList());
     }
 
+    @Override
     public Optional<User> findUser(Long userId) {
         return userRepository.findById(userId);
     }
 
+    @Override
     public EmployeeDetails approveEmployee(Long userId, BigDecimal salary, LocalDate hireDate) {
-        if (salary == null || salary.compareTo(BigDecimal.ZERO) < 0)
-            throw new IllegalArgumentException("Salary must be zero or greater");
+        ArgumentUtils.requireNonNegative(salary, "Salary");
 
         User user = userRepository.findById(userId).orElseThrow(() ->
                 new UserNotFoundException("User not found: " + userId));
@@ -60,6 +64,7 @@ public class EmployeeService implements IEmployeeService {
                 .userId(userId).salary(salary).hireDate(hireDate).build());
     }
 
+    @Override
     public void fireEmployee(Long userId) {
         User user = userRepository.findById(userId).orElseThrow(() ->
                 new UserNotFoundException("User not found: " + userId));
@@ -68,23 +73,25 @@ public class EmployeeService implements IEmployeeService {
         userRepository.updateStatus(userId, AccountStatus.FIRED);
     }
 
+    @Override
     public Optional<EmployeeDetails> getEmployeeDetails(Long userId) {
         return employeeDetailsRepository.findByUserId(userId);
     }
 
+    @Override
     public List<EmployeeDetails> getAllEmployeeDetails() {
         return employeeDetailsRepository.findAll();
     }
 
+    @Override
     public void updateSalary(Long userId, BigDecimal newSalary) {
-        if (newSalary == null || newSalary.compareTo(BigDecimal.ZERO) < 0)
-            throw new IllegalArgumentException("Salary must be zero or greater");
+        ArgumentUtils.requireNonNegative(newSalary, "New salary");
         employeeDetailsRepository.findByUserId(userId).orElseThrow(() ->
                 new UserNotFoundException("No employee details found for user: " + userId));
         employeeDetailsRepository.updateSalary(userId, newSalary);
     }
 
-
+    @Override
     public Shift assignShift(Long employeeId, String employeeName,
                              LocalDate shiftDate, LocalTime startTime, LocalTime endTime) {
         if (shiftDate.isBefore(LocalDate.now()))
@@ -94,14 +101,17 @@ public class EmployeeService implements IEmployeeService {
                 .shiftDate(shiftDate).startTime(startTime).endTime(endTime).build());
     }
 
+    @Override
     public List<Shift> getShiftsForEmployee(Long employeeId) {
         return shiftRepository.findByEmployeeId(employeeId);
     }
 
+    @Override
     public List<Shift> getTodaysShifts() {
         return shiftRepository.findByDate(LocalDate.now());
     }
 
+    @Override
     public void removeShift(Long shiftId) {
         shiftRepository.deleteById(shiftId);
     }

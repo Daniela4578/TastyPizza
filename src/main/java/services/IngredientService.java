@@ -6,6 +6,7 @@ import repositories.IngredientQuantity;
 import repositories.interfaces.IngredientRepository;
 import services.interfaces.IIngredientService;
 import services.interfaces.IProductService;
+import utilitis.ArgumentUtils;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -33,8 +34,7 @@ public class IngredientService implements IIngredientService {
 
     @Override
     public void restock(Long ingredientId, BigDecimal amountToAdd) {
-        if (amountToAdd == null || amountToAdd.compareTo(BigDecimal.ZERO) <= 0)
-            throw new IllegalArgumentException("Amount must be greater than zero");
+        ArgumentUtils.requirePositive(amountToAdd, "Amount");
 
         Ingredient ingredient = ingredientRepository.findById(ingredientId).orElseThrow(() ->
                 new IllegalArgumentException("Ingredient not found: " + ingredientId));
@@ -47,8 +47,7 @@ public class IngredientService implements IIngredientService {
 
     @Override
     public void setMinimumStock(Long ingredientId, BigDecimal minimum) {
-        if (minimum == null || minimum.compareTo(BigDecimal.ZERO) < 0)
-            throw new IllegalArgumentException("Minimum stock cannot be negative");
+        ArgumentUtils.requireNonNegative(minimum, "Minimum stock");
         ingredientRepository.findById(ingredientId).orElseThrow(() ->
                 new IllegalArgumentException("Ingredient not found: " + ingredientId));
         ingredientRepository.updateMinimumStock(ingredientId, minimum);

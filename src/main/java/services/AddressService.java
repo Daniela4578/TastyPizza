@@ -3,6 +3,7 @@ package services;
 import objects.Address;
 import repositories.interfaces.AddressRepository;
 import services.interfaces.IAddressService;
+import utilitis.ArgumentUtils;
 
 import java.util.List;
 
@@ -14,18 +15,20 @@ public class AddressService implements IAddressService {
         this.addressRepository = addressRepository;
     }
 
+    @Override
     public Address addAddress(Long userId, String name, double latitude, double longitude) {
-        if (name == null || name.isBlank())
-            throw new IllegalArgumentException("Address name cannot be empty");
+        ArgumentUtils.requireNonBlank(name, "Address name");
         return addressRepository.save(Address.builder()
                 .userId(userId).name(name.trim())
                 .latitude(latitude).longitude(longitude).build());
     }
 
+    @Override
     public List<Address> getAddresses(Long userId) {
         return addressRepository.findByUserId(userId);
     }
 
+    @Override
     public void deleteAddress(Long addressId, Long userId) {
         Address address = addressRepository.findById(addressId).orElseThrow(() ->
                 new IllegalArgumentException("Address not found: " + addressId));

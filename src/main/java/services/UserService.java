@@ -8,6 +8,7 @@ import objects.Role;
 import objects.User;
 import repositories.interfaces.UserRepository;
 import services.interfaces.IUserService;
+import utilitis.ArgumentUtils;
 import utilitis.PasswordHasher;
 
 import java.time.LocalDate;
@@ -28,6 +29,7 @@ public class UserService implements IUserService {
         this.userRepository = userRepository;
     }
 
+    @Override
     public User register(String email, String password, String firstName,
                          String lastName, String phoneNumber,
                          LocalDate dateOfBirth, Role role) {
@@ -59,6 +61,7 @@ public class UserService implements IUserService {
         return userRepository.save(newUser);
     }
 
+    @Override
     public User login(String email, String password) {
         email = email.toLowerCase().trim();
         validateEmail(email);
@@ -86,43 +89,44 @@ public class UserService implements IUserService {
         return user;
     }
 
+    @Override
     public void deactivateAccount(Long userId) {
         userRepository.findById(userId).orElseThrow(() ->
                 new UserNotFoundException("User not found: " + userId));
         userRepository.updateStatus(userId, AccountStatus.DEACTIVATED);
     }
 
+    @Override
     public void validateEmail(String email) {
-        if (email == null || email.isBlank())
-            throw new IllegalArgumentException("Email is required");
+        ArgumentUtils.requireNonBlank(email, "Email");
         if (!EMAIL_PATTERN.matcher(email).matches())
             throw new IllegalArgumentException("Invalid email format");
     }
 
+    @Override
     public void validatePassword(String password) {
-        if (password == null || password.isBlank())
-            throw new IllegalArgumentException("Password is required");
+        ArgumentUtils.requireNonBlank(password, "Password");
         if (password.length() < 6)
             throw new IllegalArgumentException("Password must be at least 6 characters");
     }
 
+    @Override
     public void validateName(String name) {
-        if (name == null || name.isBlank())
-            throw new IllegalArgumentException("Name is required");
+        ArgumentUtils.requireNonBlank(name, "Name");
         if (name.length() < 3)
             throw new IllegalArgumentException("Name must be at least 3 characters");
     }
 
+    @Override
     public void validatePhoneNumber(String phone) {
-        if (phone == null || phone.isBlank())
-            throw new IllegalArgumentException("Phone number is required");
+        ArgumentUtils.requireNonBlank(phone, "Phone number");
         if (!PHONE_PATTERN.matcher(phone).matches())
             throw new IllegalArgumentException("Invalid phone number");
     }
 
+    @Override
     public void validateAge(Role role, LocalDate dateOfBirth) {
-        if (dateOfBirth == null)
-            throw new IllegalArgumentException("Date of birth is required");
+        ArgumentUtils.requireNonNull(dateOfBirth, "Date of birth");
         int age = Period.between(dateOfBirth, LocalDate.now()).getYears();
         if (age < 16 || age > 80)
             throw new IllegalArgumentException("User must be between 16 and 80 years old");
