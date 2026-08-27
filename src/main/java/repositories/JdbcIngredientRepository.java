@@ -18,14 +18,12 @@ import java.util.Optional;
  * 2. Check if stock is enough
  * 3. Update only if version hasn't changed since we read
  * 4. If 0 rows updated → another thread changed it → retry
- * <p>
  * Example with two threads both trying to use the last 1kg of flour:
  * Thread 1 reads: stock=1, version=5
  * Thread 2 reads: stock=1, version=5
  * Thread 1 updates WHERE version=5 → succeeds, version becomes 6
  * Thread 2 updates WHERE version=5 → 0 rows (version is now 6) → retries
  * Thread 2 retries: reads stock=0, version=6 → throws InsufficientStockException
- * <p>
  * No locks, threads never block each other.
  */
 public class JdbcIngredientRepository implements IngredientRepository {
