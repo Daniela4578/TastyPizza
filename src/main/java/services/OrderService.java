@@ -1,29 +1,39 @@
 package services;
 
+import db.DatabaseConnection;
+import exceptions.InsufficientStockException;
 import exceptions.OrderNotFoundException;
 import objects.*;
+import repositories.IngredientQuantity;
+import repositories.interfaces.IngredientRepository;
 import repositories.interfaces.OrderRepository;
-import services.interfaces.IIngredientService;
+import repositories.interfaces.PaymentRepository;
 import services.interfaces.IOrderService;
-import services.interfaces.IPaymentService;
+import services.interfaces.IProductService;
 
 import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.List;
 
 public class OrderService implements IOrderService {
 
     private static final BigDecimal DELIVERY_FEE = new BigDecimal("2.99");
 
-    private final OrderRepository orderRepository;
-    private final IIngredientService ingredientService; // interface, not concrete
-    private final IPaymentService paymentService;    // interface, not concrete
+    private final OrderRepository      orderRepository;
+    private final IngredientRepository ingredientRepository; // for transactional stock deduction
+    private final PaymentRepository    paymentRepository;    // for transactional payment save
+    private final IProductService      productService;       // for product deactivation after commit
 
     public OrderService(OrderRepository orderRepository,
-                        IIngredientService ingredientService,
-                        IPaymentService paymentService) {
-        this.orderRepository = orderRepository;
-        this.ingredientService = ingredientService;
-        this.paymentService = paymentService;
+                        IngredientRepository ingredientRepository,
+                        PaymentRepository paymentRepository,
+                        IProductService productService) {
+        this.orderRepository      = orderRepository;
+        this.ingredientRepository = ingredientRepository;
+        this.paymentRepository    = paymentRepository;
+        this.productService       = productService;
     }
 
     @Override
@@ -36,35 +46,84 @@ public class OrderService implements IOrderService {
                 .map(OrderItem::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal totalPrice = itemsTotal.add(DELIVERY_FEE);
 
-        Order saved = orderRepository.save(Order.builder()
-                .customerId(customerId).addressId(addressId)
-                .status(OrderStatus.PENDING).deliveryFee(DELIVERY_FEE)
-                .totalPrice(totalPrice).items(items).build());
+        Order saved;
 
-        // deduct stock after saving
-        items.forEach(item ->
-                ingredientService.deductStockForProduct(item.getProductId(), item.getQuantity()));
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            conn.setAutoCommit(false);
 
-        // create payment record
-        paymentService.createPayment(saved.getId(), totalPrice, paymentMethod);
+            try {
+
+                saved = orderRepository.save(Order.builder()
+                        .customerId(customerId).addressId(addressId)
+                        .status(OrderStatus.PENDING).deliveryFee(DELIVERY_FEE)
+                        .totalPrice(totalPrice).items(items).build(), conn);
+
+
+                for (OrderItem item : items) {
+                    List<IngredientQuantity> recipe =
+                            ingredientRepository.findByProductId(item.getProductId());
+                    for (IngredientQuantity iq : recipe) {
+                        BigDecimal deduct = iq.getStandardQuantity()
+                                .multiply(BigDecimal.valueOf(item.getQuantity()));
+                        ingredientRepository.deductStockInTransaction(
+                                iq.getIngredientId(), deduct, conn);
+                    }
+                }
+
+                savePaymentInTransaction(saved.getId(), totalPrice, paymentMethod, conn);
+
+                conn.commit();
+
+            } catch (InsufficientStockException | IllegalArgumentException e) {
+                conn.rollback();
+                throw e;
+            } catch (Exception e) {
+                conn.rollback();
+                throw new RuntimeException("Failed to place order", e);
+            } finally {
+                conn.setAutoCommit(true);
+            }
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to place order — database error", e);
+        }
+
+        deactivateProductsWithZeroStock(items);
 
         return saved;
     }
 
-    @Override
-    public List<Order> getMyOrders(Long customerId) {
-        return orderRepository.findByCustomerId(customerId);
+    private void savePaymentInTransaction(Long orderId, BigDecimal amount,
+                                          PaymentMethod method, Connection conn) throws SQLException {
+        String sql = "INSERT INTO payments(order_id, method, status, amount) VALUES (?, ?, ?, ?)";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setLong(1, orderId);
+            stmt.setString(2, method.name());
+            stmt.setString(3, PaymentStatus.PENDING.name());
+            stmt.setBigDecimal(4, amount);
+            stmt.executeUpdate();
+        }
     }
 
-    @Override
-    public List<Order> getPendingOrders() {
-        return orderRepository.findByStatus(OrderStatus.PENDING);
+    private void deactivateProductsWithZeroStock(List<OrderItem> items) {
+        for (OrderItem item : items) {
+            ingredientRepository.findByProductId(item.getProductId()).forEach(iq ->
+                    ingredientRepository.findById(iq.getIngredientId()).ifPresent(ingredient -> {
+                        if (ingredient.getStockQuantity().compareTo(BigDecimal.ZERO) == 0) {
+                            productService.getAllActiveProducts().forEach(product -> {
+                                boolean uses = ingredientRepository.findByProductId(product.getId())
+                                        .stream().anyMatch(r -> r.getIngredientId().equals(ingredient.getId()));
+                                if (uses) productService.deactivateProduct(product.getId());
+                            });
+                        }
+                    })
+            );
+        }
     }
 
-    @Override
-    public List<Order> getProcessingOrders() {
-        return orderRepository.findByStatus(OrderStatus.PROCESSING);
-    }
+    @Override public List<Order> getMyOrders(Long customerId)  { return orderRepository.findByCustomerId(customerId); }
+    @Override public List<Order> getPendingOrders()            { return orderRepository.findByStatus(OrderStatus.PENDING); }
+    @Override public List<Order> getProcessingOrders()         { return orderRepository.findByStatus(OrderStatus.PROCESSING); }
 
     @Override
     public void processOrder(Long orderId, Long employeeId, int estimatedMinutes) {
@@ -80,7 +139,7 @@ public class OrderService implements IOrderService {
         orderRepository.findById(orderId).orElseThrow(() ->
                 new OrderNotFoundException("Order not found: " + orderId));
         orderRepository.updateStatus(orderId, OrderStatus.DELIVERED, null, null);
-        paymentService.completePayment(orderId);
+        paymentRepository.updateStatus(orderId, PaymentStatus.COMPLETED);
     }
 
     @Override

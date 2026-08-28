@@ -11,21 +11,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * HOW OPTIMISTIC LOCKING WORKS:
- * Instead of locking the row (which blocks other threads), we:
- * 1. Read the current stock AND version number
- * 2. Check if stock is enough
- * 3. Update only if version hasn't changed since we read
- * 4. If 0 rows updated → another thread changed it → retry
- * Example with two threads both trying to use the last 1kg of flour:
- * Thread 1 reads: stock=1, version=5
- * Thread 2 reads: stock=1, version=5
- * Thread 1 updates WHERE version=5 → succeeds, version becomes 6
- * Thread 2 updates WHERE version=5 → 0 rows (version is now 6) → retries
- * Thread 2 retries: reads stock=0, version=6 → throws InsufficientStockException
- * No locks, threads never block each other.
- */
 public class JdbcIngredientRepository implements IngredientRepository {
 
     private static final int MAX_RETRIES = 3;
@@ -55,50 +40,51 @@ public class JdbcIngredientRepository implements IngredientRepository {
         return Optional.empty();
     }
 
-    /**
-     * Deducts stock using optimistic locking with automatic retry.
-     * Returns 1 if successful, throws InsufficientStockException if not enough stock.
-     */
     @Override
-    public int deductStock(Long id, BigDecimal amount) {
-        return deductWithRetry(id, amount, 0);
+    public int deductStockInTransaction(Long id, BigDecimal amount, Connection conn) throws SQLException {
+        return deductWithConnectionRetry(id, amount, conn, 0);
     }
 
-    private int deductWithRetry(Long id, BigDecimal amount, int attempt) {
-        if (attempt >= MAX_RETRIES) {
-            throw new InsufficientStockException(
-                    "Could not deduct stock after " + MAX_RETRIES + " retries for ingredient: " + id);
-        }
+    private int deductWithConnectionRetry(Long id, BigDecimal amount, Connection conn, int attempt) throws SQLException {
+        if (attempt >= MAX_RETRIES)
+            throw new InsufficientStockException("Could not deduct stock after " + MAX_RETRIES + " retries for ingredient: " + id);
 
-        //  1. Read the current stock AND version number
-        Ingredient ingredient = findById(id).orElseThrow(() ->
+        Ingredient ingredient = findByIdWithConnection(id, conn).orElseThrow(() ->
                 new IllegalArgumentException("Ingredient not found: " + id));
 
-        // 2. Check if stock is enough
         if (ingredient.getStockQuantity().compareTo(amount) < 0) {
             throw new InsufficientStockException(
                     "Not enough stock for ingredient: " + ingredient.getName() +
                             " (need: " + amount + ", have: " + ingredient.getStockQuantity() + ")");
         }
 
-        // 3. Update only if version hasn't changed since we read
-        String sql = "UPDATE ingredients " +
-                "SET stock_quantity = stock_quantity - ?, version = version + 1 " +
+        String sql = "UPDATE ingredients SET stock_quantity = stock_quantity - ?, version = version + 1 " +
                 "WHERE id = ? AND version = ?";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setBigDecimal(1, amount);
             stmt.setLong(2, id);
             stmt.setInt(3, ingredient.getVersion());
             int affected = stmt.executeUpdate();
-
-            // 4. If 0 rows updated → another thread changed it → retry
-            if (affected == 0) {
-                return deductWithRetry(id, amount, attempt + 1);
-            }
+            if (affected == 0) return deductWithConnectionRetry(id, amount, conn, attempt + 1);
             return affected;
+        }
+    }
 
+    private Optional<Ingredient> findByIdWithConnection(Long id, Connection conn) throws SQLException {
+        String sql = "SELECT * FROM ingredients WHERE id = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setLong(1, id);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) return Optional.of(mapRow(rs));
+            }
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public int deductStock(Long id, BigDecimal amount) {
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            return deductWithConnectionRetry(id, amount, conn, 0);
         } catch (SQLException e) {
             throw new RuntimeException("Failed to deduct stock for ingredient: " + id, e);
         }
@@ -157,11 +143,10 @@ public class JdbcIngredientRepository implements IngredientRepository {
 
     private Ingredient mapRow(ResultSet rs) throws SQLException {
         return Ingredient.builder()
-                .id(rs.getLong("id")).name(rs.getString("name"))
-                .unit(rs.getString("unit"))
+                .id(rs.getLong("id")).name(rs.getString("name")).unit(rs.getString("unit"))
                 .stockQuantity(rs.getBigDecimal("stock_quantity"))
                 .minimumStock(rs.getBigDecimal("minimum_stock"))
-                .version(rs.getInt("version")) // read version from DB
+                .version(rs.getInt("version"))
                 .build();
     }
 }

@@ -1,9 +1,10 @@
 package config;
 
-import repositories.interfaces.*;
 import repositories.*;
+import repositories.interfaces.*;
 import services.*;
 import services.interfaces.*;
+
 
 public final class AppConfig {
 
@@ -33,7 +34,13 @@ public final class AppConfig {
         IProductService productService = new ProductService(productRepository, categoryRepository);
         IIngredientService ingredientService = new IngredientService(ingredientRepository, productService);
         IPaymentService paymentService = new PaymentService(paymentRepository);
-        IOrderService orderService = new OrderService(orderRepository, ingredientService, paymentService);
+
+        IOrderService orderService = new OrderService(
+                orderRepository,
+                ingredientRepository,
+                paymentRepository,
+                productService);
+
         IOrderHistoryService orderHistoryService = new OrderHistoryService(historyRepository);
 
         return new ServiceContainer(

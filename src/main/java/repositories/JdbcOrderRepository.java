@@ -13,58 +13,46 @@ import java.util.Optional;
 
 public class JdbcOrderRepository implements OrderRepository {
 
+    private static final String ORDER_SQL =
+            "INSERT INTO orders(customer_id, address_id, status, delivery_fee, total_price) VALUES (?, ?, ?, ?, ?)";
+    private static final String ITEM_SQL =
+            "INSERT INTO order_items(order_id, product_id, product_size_id, quantity, unit_price, special_instructions) VALUES (?, ?, ?, ?, ?, ?)";
+
     @Override
-    public Order save(Order order) {
-        String orderSql = "INSERT INTO orders(customer_id, address_id, status, delivery_fee, total_price) VALUES (?, ?, ?, ?, ?)";
-        String itemSql  = "INSERT INTO order_items(order_id, product_id, product_size_id, quantity, unit_price, special_instructions) VALUES (?, ?, ?, ?, ?, ?)";
+    public Order save(Order order, Connection conn) throws SQLException {
+        Long orderId;
 
-        try (Connection conn = DatabaseConnection.getConnection()) {
-            conn.setAutoCommit(false);
-            try {
-                Long orderId;
-
-                try (PreparedStatement stmt = conn.prepareStatement(orderSql, Statement.RETURN_GENERATED_KEYS)) {
-                    stmt.setLong(1, order.getCustomerId());
-                    stmt.setLong(2, order.getAddressId());
-                    stmt.setString(3, order.getStatus().name());
-                    stmt.setBigDecimal(4, order.getDeliveryFee());
-                    stmt.setBigDecimal(5, order.getTotalPrice());
-                    stmt.executeUpdate();
-                    try (ResultSet keys = stmt.getGeneratedKeys()) {
-                        if (!keys.next()) throw new SQLException("Failed to get generated order ID");
-                        orderId = keys.getLong(1);
-                    }
-                }
-
-                for (OrderItem item : order.getItems()) {
-                    try (PreparedStatement stmt = conn.prepareStatement(itemSql)) {
-                        stmt.setLong(1, orderId);
-                        stmt.setLong(2, item.getProductId());
-                        if (item.getProductSizeId() != null) stmt.setLong(3, item.getProductSizeId());
-                        else stmt.setNull(3, Types.BIGINT);
-                        stmt.setInt(4, item.getQuantity());
-                        stmt.setBigDecimal(5, item.getUnitPrice());
-                        stmt.setString(6, item.getSpecialInstructions());
-                        stmt.executeUpdate();
-                    }
-                }
-
-                conn.commit();
-                return Order.builder()
-                        .id(orderId).customerId(order.getCustomerId())
-                        .addressId(order.getAddressId()).status(order.getStatus())
-                        .deliveryFee(order.getDeliveryFee()).totalPrice(order.getTotalPrice())
-                        .items(order.getItems()).build();
-
-            } catch (SQLException e) {
-                conn.rollback();
-                throw e;
-            } finally {
-                conn.setAutoCommit(true);
+        try (PreparedStatement stmt = conn.prepareStatement(ORDER_SQL, Statement.RETURN_GENERATED_KEYS)) {
+            stmt.setLong(1, order.getCustomerId());
+            stmt.setLong(2, order.getAddressId());
+            stmt.setString(3, order.getStatus().name());
+            stmt.setBigDecimal(4, order.getDeliveryFee());
+            stmt.setBigDecimal(5, order.getTotalPrice());
+            stmt.executeUpdate();
+            try (ResultSet keys = stmt.getGeneratedKeys()) {
+                if (!keys.next()) throw new SQLException("Failed to get generated order ID");
+                orderId = keys.getLong(1);
             }
-        } catch (SQLException e) {
-            throw new RuntimeException("Failed to save order", e);
         }
+
+        for (OrderItem item : order.getItems()) {
+            try (PreparedStatement stmt = conn.prepareStatement(ITEM_SQL)) {
+                stmt.setLong(1, orderId);
+                stmt.setLong(2, item.getProductId());
+                if (item.getProductSizeId() != null) stmt.setLong(3, item.getProductSizeId());
+                else stmt.setNull(3, Types.BIGINT);
+                stmt.setInt(4, item.getQuantity());
+                stmt.setBigDecimal(5, item.getUnitPrice());
+                stmt.setString(6, item.getSpecialInstructions());
+                stmt.executeUpdate();
+            }
+        }
+
+        return Order.builder()
+                .id(orderId).customerId(order.getCustomerId())
+                .addressId(order.getAddressId()).status(order.getStatus())
+                .deliveryFee(order.getDeliveryFee()).totalPrice(order.getTotalPrice())
+                .items(order.getItems()).build();
     }
 
     @Override
@@ -181,13 +169,12 @@ public class JdbcOrderRepository implements OrderRepository {
     }
 
     private Order mapRow(ResultSet rs) throws SQLException {
-        long processedByVal = rs.getLong("processed_by");
-        Long processedBy = rs.wasNull() ? null : processedByVal;
-        int estVal = rs.getInt("estimated_delivery");
-        Integer estimated = rs.wasNull() ? null : estVal;
+        long pv = rs.getLong("processed_by");
+        Long processedBy = rs.wasNull() ? null : pv;
+        int ev = rs.getInt("estimated_delivery");
+        Integer estimated = rs.wasNull() ? null : ev;
         Timestamp createdAt = rs.getTimestamp("created_at");
         Timestamp updatedAt = rs.getTimestamp("updated_at");
-
         return Order.builder()
                 .id(rs.getLong("id")).customerId(rs.getLong("customer_id"))
                 .customerName(rs.getString("first_name") + " " + rs.getString("last_name"))
