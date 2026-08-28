@@ -1,920 +1,143 @@
 package server;
 
-import exceptions.AccountNotActiveException;
-import exceptions.EmailAlreadyExistsException;
-import objects.*;
-import services.*;
+import server.command.Command;
+import server.command.ExitCommand;
+import server.command.LogInCommand;
+import server.command.LogOutCommand;
+import server.command.RegisterCommand;
+import server.command.customer.*;
+import server.command.employee.*;
+import server.command.manager.*;
+import services.ServiceContainer;
 
 import java.io.*;
-import java.math.BigDecimal;
 import java.net.Socket;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Consumer;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 
 public class ClientHandler implements Runnable {
 
-    private static final BigDecimal DELIVERY_FEE = new BigDecimal("2.99");
+    private static final Map<String, Command> MAIN_COMMANDS = buildMainCommands();
+    private static final Map<String, Command> CUSTOMER_COMMANDS = buildCustomerCommands();
+    private static final Map<String, Command> EMPLOYEE_COMMANDS = buildEmployeeCommands();
+    private static final Map<String, Command> MANAGER_COMMANDS = buildManagerCommands();
 
-    private final Socket           clientSocket;
+    private final Socket clientSocket;
     private final ServiceContainer services;
-    private BufferedReader         in;
-    private PrintWriter            out;
 
     public ClientHandler(Socket clientSocket, ServiceContainer services) {
         this.clientSocket = clientSocket;
-        this.services     = services;
+        this.services = services;
     }
 
     @Override
     public void run() {
-        try {
-            in  = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-            out = new PrintWriter(clientSocket.getOutputStream(), true);
+        try (PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
+             BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()))) {
 
             out.println("================================");
             out.println("   WELCOME TO TASTY PIZZA!     ");
             out.println("================================");
 
-            User loggedInUser = null;
-            boolean running = true;
+            SessionContext ctx = new SessionContext(out, in, services);
 
-            while (running) {
-                if (loggedInUser == null) {
-                    printMainMenu();
-                    String choice = in.readLine();
-                    if (choice == null) break;
-                    switch (choice.trim()) {
-                        case "1" -> handleRegistration();
-                        case "2" -> loggedInUser = handleLogin();
-                        case "3" -> { out.println("Goodbye!"); running = false; }
-                        default  -> out.println("Invalid choice.");
+            while (ctx.isRunning()) {
+                Map<String, Command> commands = currentCommands(ctx);
+                printMenu(ctx, commands);
+
+                String choice;
+                try {
+                    choice = ctx.readLine();
+                } catch (IOException e) {
+                    break;
+                }
+
+                Command cmd = commands.get(choice);
+                if (cmd != null) {
+                    try {
+                        cmd.execute(ctx);
+                    } catch (IOException e) {
+                        break;
+                    } catch (RuntimeException e) {
+                        System.err.println("Error in " + cmd.getClass().getSimpleName() + ": " + e.getMessage());
+                        out.println("An unexpected error occurred. Please try again.");
                     }
                 } else {
-                    switch (loggedInUser.getRole()) {
-                        case CUSTOMER -> {
-                            printCustomerMenu();
-                            String choice = in.readLine();
-                            if (choice == null) { running = false; break; }
-                            switch (choice.trim()) {
-                                case "1" -> handleBrowseMenu();
-                                case "2" -> handlePlaceOrder(loggedInUser);
-                                case "3" -> handleMyOrders(loggedInUser);
-                                case "4" -> handleMyAddresses(loggedInUser);
-                                case "5" -> handleDeleteAccount(loggedInUser);
-                                case "6" -> { out.println("Logged out."); loggedInUser = null; }
-                                default  -> out.println("Invalid choice.");
-                            }
-                        }
-                        case EMPLOYEE -> {
-                            printEmployeeMenu();
-                            String choice = in.readLine();
-                            if (choice == null) { running = false; break; }
-                            switch (choice.trim()) {
-                                case "1" -> handleViewMyShifts(loggedInUser);
-                                case "2" -> handleViewMyDetails(loggedInUser);
-                                case "3" -> handleViewPendingOrders();
-                                case "4" -> handleProcessOrder(loggedInUser);
-                                case "5" -> handleDeliverOrder();
-                                case "6" -> handleViewLowStock();
-                                case "7" -> { out.println("Logged out."); loggedInUser = null; }
-                                default  -> out.println("Invalid choice.");
-                            }
-                        }
-                        case MANAGER -> {
-                            printManagerMenu();
-                            String choice = in.readLine();
-                            if (choice == null) { running = false; break; }
-                            switch (choice.trim()) {
-                                case "1"  -> handleViewPendingEmployees();
-                                case "2"  -> handleApproveEmployee();
-                                case "3"  -> handleFireEmployee();
-                                case "4"  -> handleViewAllEmployees();
-                                case "5"  -> handleAssignShift();
-                                case "6"  -> handleRemoveShift();
-                                case "7"  -> handleViewTodaysShifts();
-                                case "8"  -> handleUpdateSalary();
-                                case "9"  -> handleManageProducts();
-                                case "10" -> handleManageStock();
-                                case "11" -> handleViewAllOrders();
-                                case "12" -> { out.println("Logged out."); loggedInUser = null; }
-                                default   -> out.println("Invalid choice.");
-                            }
-                        }
-                    }
+                    out.println("Invalid choice.");
                 }
             }
+
         } catch (IOException e) {
             System.out.println("Client disconnected: " + e.getMessage());
         } finally {
-            closeConnection();
-        }
-    }
-
-    // ── Menus ──────────────────────────────────────────────────────────────
-
-    private void printMainMenu() {
-        out.println("\nMAIN MENU:");
-        out.println("1 - Register");
-        out.println("2 - Login");
-        out.println("3 - Exit");
-        out.println("Choose:");
-    }
-
-    private void printCustomerMenu() {
-        out.println("\nCUSTOMER MENU:");
-        out.println("1 - Browse menu");
-        out.println("2 - Place order");
-        out.println("3 - My orders");
-        out.println("4 - My addresses");
-        out.println("5 - Delete my account");
-        out.println("6 - Logout");
-        out.println("Choose:");
-    }
-
-    private void printEmployeeMenu() {
-        out.println("\nEMPLOYEE MENU:");
-        out.println("1 - My shifts");
-        out.println("2 - My details");
-        out.println("3 - View pending orders");
-        out.println("4 - Process order");
-        out.println("5 - Mark order as delivered");
-        out.println("6 - View low stock");
-        out.println("7 - Logout");
-        out.println("Choose:");
-    }
-
-    private void printManagerMenu() {
-        out.println("\nMANAGER MENU:");
-        out.println("1  - View pending employees");
-        out.println("2  - Approve employee");
-        out.println("3  - Fire employee");
-        out.println("4  - View all employees");
-        out.println("5  - Assign shift");
-        out.println("6  - Remove shift");
-        out.println("7  - Today's shifts");
-        out.println("8  - Update salary");
-        out.println("9  - Manage products");
-        out.println("10 - Manage stock");
-        out.println("11 - View all orders");
-        out.println("12 - Logout");
-        out.println("Choose:");
-    }
-
-    // ── Auth ───────────────────────────────────────────────────────────────
-
-    private void handleRegistration() throws IOException {
-        out.println("\nREGISTRATION:");
-
-        String email     = readValidatedInput("Email:", services.getUserService()::validateEmail);
-        String password  = readValidatedInput("Password (min 6 chars):", services.getUserService()::validatePassword);
-        String firstName = readValidatedInput("First name:", services.getUserService()::validateName);
-        String lastName  = readValidatedInput("Last name:", services.getUserService()::validateName);
-        String phone     = readValidatedInput("Phone number:", services.getUserService()::validatePhoneNumber);
-        LocalDate dob    = readValidatedDate("Date of birth (YYYY-MM-DD):");
-        Role role        = readValidatedRole();
-
-        while (true) {
             try {
-                services.getUserService().validateAge(role, dob);
-                break;
-            } catch (IllegalArgumentException e) {
-                out.println("Error: " + e.getMessage());
-                dob = readValidatedDate("Date of birth (YYYY-MM-DD):");
-            }
-        }
-
-        while (true) {
-            try {
-                User user = services.getUserService().register(email, password, firstName, lastName, phone, dob, role);
-                if (user.getStatus() == AccountStatus.PENDING) {
-                    out.println("\nRegistration submitted! Your account is pending manager approval.");
-                } else {
-                    out.println("\nAccount created successfully!");
-                    out.println(user);
-                }
-                return;
-            } catch (EmailAlreadyExistsException e) {
-                out.println("Error: " + e.getMessage());
-                email = readValidatedInput("Enter a different email:", services.getUserService()::validateEmail);
-            } catch (IllegalArgumentException e) {
-                out.println("\nRegistration failed: " + e.getMessage());
-                return;
+                clientSocket.close();
+            } catch (IOException ignored) {
             }
         }
     }
 
-    private User handleLogin() throws IOException {
-        out.println("\nLOGIN:");
-        String email    = readValidatedInput("Email:", services.getUserService()::validateEmail);
-        String password = readValidatedInput("Password:", services.getUserService()::validatePassword);
-
-        try {
-            User user = services.getUserService().login(email, password);
-            out.println("\nLogin successful! Welcome, " + user.getFullName() + "!");
-            return user;
-        } catch (AccountNotActiveException e) {
-            // custom exception gives a specific clear message
-            out.println("\n" + e.getMessage());
-            return null;
-        } catch (IllegalArgumentException e) {
-            out.println("\nLogin failed: " + e.getMessage());
-            return null;
-        }
+    private static Map<String, Command> currentCommands(SessionContext ctx) {
+        if (!ctx.isLoggedIn()) return MAIN_COMMANDS;
+        return switch (ctx.getUser().getRole()) {
+            case CUSTOMER -> CUSTOMER_COMMANDS;
+            case EMPLOYEE -> EMPLOYEE_COMMANDS;
+            case MANAGER -> MANAGER_COMMANDS;
+        };
     }
 
-    // ── Customer ───────────────────────────────────────────────────────────
-
-    private void handleBrowseMenu() throws IOException {
-        List<Category> categories = services.getProductService().getCategories();
-        if (categories.isEmpty()) { out.println("\nNo categories available."); return; }
-
-        out.println("\nMENU:");
-        for (int i = 0; i < categories.size(); i++)
-            out.println((i + 1) + " - " + categories.get(i).getName());
-        out.println("0 - Back");
-        out.println("Choose category:");
-
-        String input = in.readLine();
-        if (input == null || input.trim().equals("0")) return;
-
-        int idx;
-        try { idx = Integer.parseInt(input.trim()) - 1; }
-        catch (NumberFormatException e) { out.println("Invalid choice."); return; }
-        if (idx < 0 || idx >= categories.size()) { out.println("Invalid choice."); return; }
-
-        List<Product> products = services.getProductService().getProductsByCategory(categories.get(idx).getId());
-        if (products.isEmpty()) { out.println("No products in this category."); return; }
-
-        out.println("\n--- " + categories.get(idx).getName().toUpperCase() + " ---");
-        for (Product p : products) {
-            List<ProductSize> sizes = services.getProductService().getSizesByProduct(p.getId());
-            if (sizes.isEmpty()) {
-                out.println(String.format("  [%d] %s - %.2f EUR", p.getId(), p.getName(), p.getPrice()));
-            } else {
-                out.println(String.format("  [%d] %s", p.getId(), p.getName()));
-                for (ProductSize s : sizes)
-                    out.println(String.format("       %s - %.2f EUR", s.getSizeLabel(), s.getPrice()));
-            }
-            if (p.getDescription() != null && !p.getDescription().isBlank())
-                out.println("       " + p.getDescription());
-        }
+    private static void printMenu(SessionContext ctx, Map<String, Command> commands) {
+        ctx.println("");
+        commands.forEach((key, cmd) -> ctx.println(key + " - " + cmd.label()));
+        ctx.println("Choose:");
     }
 
-    private void handlePlaceOrder(User customer) throws IOException {
-        List<Address> addresses = services.getAddressService().getAddresses(customer.getId());
-        if (addresses.isEmpty()) {
-            out.println("\nYou need a delivery address first.");
-            Address addr = handleAddNewAddress(customer);
-            if (addr == null) return;
-            addresses = services.getAddressService().getAddresses(customer.getId());
-        }
-
-        List<OrderItem> cart = new ArrayList<>();
-
-        while (true) {
-            List<Category> categories = services.getProductService().getCategories();
-            out.println("\nADD ITEM — choose category (0 to checkout):");
-            for (int i = 0; i < categories.size(); i++)
-                out.println((i + 1) + " - " + categories.get(i).getName());
-            out.println("0 - Checkout");
-            out.println("Choose:");
-
-            String catInput = in.readLine();
-            if (catInput == null || catInput.trim().equals("0")) break;
-
-            int catIdx;
-            try { catIdx = Integer.parseInt(catInput.trim()) - 1; }
-            catch (NumberFormatException e) { out.println("Invalid."); continue; }
-            if (catIdx < 0 || catIdx >= categories.size()) { out.println("Invalid."); continue; }
-
-            List<Product> products = services.getProductService().getProductsByCategory(categories.get(catIdx).getId());
-            if (products.isEmpty()) { out.println("No products available in this category."); continue; }
-            out.println("\nProducts:");
-            for (int i = 0; i < products.size(); i++)
-                out.println((i + 1) + " - " + products.get(i).getName() + " - " + products.get(i).getPrice() + " EUR");
-            out.println("0 - Back");
-            out.println("Choose:");
-
-            String prodInput = in.readLine();
-            if (prodInput == null || prodInput.trim().equals("0")) continue;
-
-            int prodIdx;
-            try { prodIdx = Integer.parseInt(prodInput.trim()) - 1; }
-            catch (NumberFormatException e) { out.println("Invalid."); continue; }
-            if (prodIdx < 0 || prodIdx >= products.size()) { out.println("Invalid."); continue; }
-
-            Product product = products.get(prodIdx);
-            List<ProductSize> sizes = services.getProductService().getSizesByProduct(product.getId());
-
-            Long sizeId = null;
-            String sizeName = null;
-            BigDecimal unitPrice = product.getPrice();
-
-            if (!sizes.isEmpty()) {
-                out.println("\nChoose size:");
-                for (int i = 0; i < sizes.size(); i++)
-                    out.println((i + 1) + " - " + sizes.get(i).getSizeLabel() + " - " + sizes.get(i).getPrice() + " EUR");
-                out.println("Choose:");
-                String sizeInput = in.readLine();
-                int sizeIdx;
-                try { sizeIdx = Integer.parseInt(sizeInput.trim()) - 1; }
-                catch (NumberFormatException e) { out.println("Invalid."); continue; }
-                if (sizeIdx < 0 || sizeIdx >= sizes.size()) { out.println("Invalid."); continue; }
-                sizeId    = sizes.get(sizeIdx).getId();
-                sizeName  = sizes.get(sizeIdx).getSizeLabel();
-                unitPrice = sizes.get(sizeIdx).getPrice();
-            }
-
-            out.println("Quantity:");
-            int qty;
-            try { qty = Integer.parseInt(in.readLine().trim()); if (qty <= 0) throw new NumberFormatException(); }
-            catch (NumberFormatException e) { out.println("Invalid quantity."); continue; }
-
-            out.println("Special instructions (Enter to skip):");
-            String instructions = in.readLine();
-            if (instructions != null && instructions.isBlank()) instructions = null;
-
-            OrderItem newItem = OrderItem.builder()
-                    .productId(product.getId()).productName(product.getName())
-                    .productSizeId(sizeId).sizeName(sizeName)
-                    .quantity(qty).unitPrice(unitPrice)
-                    .specialInstructions(instructions).build();
-            cart.add(newItem);
-            BigDecimal cartTotal = cart.stream().map(OrderItem::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
-            out.println(String.format("Added. Cart: %d item(s) | %.2f EUR + %.2f delivery = %.2f EUR total",
-                    cart.size(), cartTotal, DELIVERY_FEE, cartTotal.add(DELIVERY_FEE)));
-        }
-
-        if (cart.isEmpty()) { out.println("Cart is empty. Order cancelled."); return; }
-
-        out.println("\nYOUR ORDER:");
-        BigDecimal itemsTotal = BigDecimal.ZERO;
-        for (OrderItem item : cart) { out.println(item); itemsTotal = itemsTotal.add(item.getSubtotal()); }
-        out.println(String.format("Items:    %.2f EUR", itemsTotal));
-        out.println(String.format("Delivery: %.2f EUR", DELIVERY_FEE));
-        out.println(String.format("TOTAL:    %.2f EUR", itemsTotal.add(DELIVERY_FEE)));
-
-        out.println("\nDELIVERY ADDRESS:");
-        for (int i = 0; i < addresses.size(); i++)
-            out.println((i + 1) + " - " + addresses.get(i).getName());
-        out.println((addresses.size() + 1) + " - Add new address");
-        out.println("Choose:");
-
-        String addrInput = in.readLine();
-        int addrIdx;
-        try { addrIdx = Integer.parseInt(addrInput.trim()) - 1; }
-        catch (NumberFormatException e) { out.println("Invalid. Order cancelled."); return; }
-
-        Long addressId;
-        if (addrIdx == addresses.size()) {
-            Address newAddr = handleAddNewAddress(customer);
-            if (newAddr == null) { out.println("Order cancelled."); return; }
-            addressId = newAddr.getId();
-        } else if (addrIdx >= 0 && addrIdx < addresses.size()) {
-            addressId = addresses.get(addrIdx).getId();
-        } else {
-            out.println("Invalid. Order cancelled.");
-            return;
-        }
-
-        out.println("\nPAYMENT METHOD:");
-        out.println("1 - Cash on delivery");
-        out.println("2 - Card");
-        out.println("Choose:");
-        String payChoice = in.readLine();
-        PaymentMethod paymentMethod;
-        if ("2".equals(payChoice != null ? payChoice.trim() : "")) {
-            paymentMethod = PaymentMethod.CARD;
-        } else {
-            paymentMethod = PaymentMethod.CASH;
-        }
-        out.println("Payment: " + (paymentMethod == PaymentMethod.CARD ? "Card" : "Cash on delivery"));
-
-        out.println("\nConfirm order? (yes/no):");
-        String confirm = in.readLine();
-        if (confirm == null || !confirm.trim().equalsIgnoreCase("yes")) { out.println("Order cancelled."); return; }
-
-        try {
-            Order order = services.getOrderService().placeOrder(customer.getId(), addressId, cart, paymentMethod);
-            out.println("\nOrder placed! Order #" + order.getId());
-            out.println("Payment: " + (paymentMethod == PaymentMethod.CARD ? "Card" : "Cash on delivery") + " | Status: PENDING");
-            if (paymentMethod == PaymentMethod.CARD) {
-                out.println("Please have your card ready for the delivery driver.");
-            }
-        } catch (Exception e) {
-            out.println("\nFailed to place order: " + e.getMessage());
-        }
+    private static Map<String, Command> buildMainCommands() {
+        Map<String, Command> m = new LinkedHashMap<>();
+        m.put("1", new RegisterCommand());
+        m.put("2", new LogInCommand());
+        m.put("3", new ExitCommand());
+        return m;
     }
 
-    private void handleMyOrders(User customer) {
-        List<Order> orders = services.getOrderService().getMyOrders(customer.getId());
-        if (orders.isEmpty()) { out.println("\nNo orders yet."); return; }
-        out.println("\nMY ORDERS:");
-        for (Order o : orders) {
-            out.println(o);
-
-            // show payment info
-            services.getPaymentService().getPaymentForOrder(o.getId()).ifPresent(p ->
-                    out.println(String.format("  Payment: %s | %s",
-                            p.getMethod() == PaymentMethod.CASH ? "Cash on delivery" : "Card",
-                            p.getStatus())));
-
-            // show status timeline from order_status_history
-            // rows are written automatically by MySQL trigger on every status change
-            List<objects.OrderStatusHistory> history =
-                    services.getOrderHistoryService().getHistory(o.getId());
-            if (!history.isEmpty()) {
-                out.println("  Timeline:");
-                history.forEach(h -> {
-                    String from = h.getOldStatus() != null ? h.getOldStatus().name() : "NEW";
-                    String time = h.getChangedAt() != null
-                            ? h.getChangedAt().toLocalTime().toString()
-                            : "unknown";
-                    out.println(String.format("    %s → %s at %s", from, h.getNewStatus(), time));
-                });
-            }
-            out.println("---");
-        }
+    private static Map<String, Command> buildCustomerCommands() {
+        Map<String, Command> m = new LinkedHashMap<>();
+        m.put("1", new BrowseMenuCommand());
+        m.put("2", new PlaceOrderCommand());
+        m.put("3", new MyOrdersCommand());
+        m.put("4", new MyAddressesCommand());
+        m.put("5", new DeleteAccountCommand());
+        m.put("6", new LogOutCommand());
+        return m;
     }
 
-    private void handleMyAddresses(User customer) throws IOException {
-        List<Address> addresses = services.getAddressService().getAddresses(customer.getId());
-        out.println("\nMY ADDRESSES:");
-        if (addresses.isEmpty()) {
-            out.println("No addresses saved.");
-        } else {
-            for (int i = 0; i < addresses.size(); i++)
-                out.println(String.format("[%d] %s", i + 1, addresses.get(i).getName()));
-        }
-        out.println("\n1 - Add new address");
-        if (!addresses.isEmpty()) out.println("2 - Delete address");
-        out.println("0 - Back");
-        out.println("Choose:");
-        String choice = in.readLine();
-        if (choice == null) return;
-        switch (choice.trim()) {
-            case "1" -> handleAddNewAddress(customer);
-            case "2" -> {
-                if (addresses.isEmpty()) { out.println("No addresses to delete."); return; }
-                out.println("Enter address number to delete:");
-                int idx;
-                try { idx = Integer.parseInt(in.readLine().trim()) - 1; }
-                catch (NumberFormatException e) { out.println("Invalid."); return; }
-                if (idx < 0 || idx >= addresses.size()) { out.println("Invalid."); return; }
-                try {
-                    services.getAddressService().deleteAddress(addresses.get(idx).getId(), customer.getId());
-                    out.println("Address deleted.");
-                } catch (Exception e) { out.println("Error: " + e.getMessage()); }
-            }
-        }
+    private static Map<String, Command> buildEmployeeCommands() {
+        Map<String, Command> m = new LinkedHashMap<>();
+        m.put("1", new ViewShiftsCommand());
+        m.put("2", new ViewDetailsCommand());
+        m.put("3", new ViewPendingOrdersCommand());
+        m.put("4", new ProcessOrderCommand());
+        m.put("5", new DeliverOrderCommand());
+        m.put("6", new ViewLowStockCommand());
+        m.put("7", new LogOutCommand());
+        return m;
     }
 
-    private Address handleAddNewAddress(User customer) throws IOException {
-        out.println("\nADD ADDRESS:");
-        out.println("Name (e.g. Home, Work):");
-        String name = in.readLine();
-        if (name == null || name.isBlank()) { out.println("Cancelled."); return null; }
-
-        double lat, lng;
-        try {
-            out.println("Latitude:");
-            lat = Double.parseDouble(in.readLine().trim());
-            out.println("Longitude:");
-            lng = Double.parseDouble(in.readLine().trim());
-        } catch (NumberFormatException e) {
-            out.println("Invalid coordinates. Cancelled.");
-            return null;
-        }
-
-        try {
-            Address address = services.getAddressService().addAddress(customer.getId(), name.trim(), lat, lng);
-            out.println("Address saved: " + address.getName());
-            return address;
-        } catch (Exception e) {
-            out.println("Failed to save address: " + e.getMessage());
-            return null;
-        }
-    }
-
-    private void handleDeleteAccount(User user) throws IOException {
-        out.println("\nAre you sure? This cannot be undone. (yes/no):");
-        String confirm = in.readLine();
-        if (confirm != null && confirm.trim().equalsIgnoreCase("yes")) {
-            services.getUserService().deactivateAccount(user.getId());
-            out.println("Account deactivated. Goodbye!");
-        } else {
-            out.println("Cancelled.");
-        }
-    }
-
-    // ── Employee ───────────────────────────────────────────────────────────
-
-    private void handleViewMyShifts(User employee) {
-        List<Shift> shifts = services.getEmployeeService().getShiftsForEmployee(employee.getId());
-        if (shifts.isEmpty()) { out.println("\nNo shifts assigned."); return; }
-        out.println("\nMY SHIFTS:");
-        shifts.forEach(s -> out.println(s));
-    }
-
-    private void handleViewMyDetails(User employee) {
-        services.getEmployeeService().getEmployeeDetails(employee.getId())
-                .ifPresentOrElse(
-                        d -> out.println("\n" + d),
-                        () -> out.println("\nNo details on file yet.")
-                );
-    }
-
-    private void handleViewPendingOrders() {
-        List<Order> orders = services.getOrderService().getPendingOrders();
-        if (orders.isEmpty()) { out.println("\nNo pending orders."); return; }
-        out.println("\nPENDING ORDERS:");
-        orders.forEach(o -> { out.println(o); out.println("---"); });
-    }
-
-    private void handleProcessOrder(User employee) throws IOException {
-        // show pending orders so employee knows which IDs exist
-        List<Order> pending = services.getOrderService().getPendingOrders();
-        if (pending.isEmpty()) { out.println("\nNo pending orders to process."); return; }
-        out.println("\nPENDING ORDERS:");
-        pending.forEach(o -> { out.println(o); out.println("---"); });
-
-        out.println("Enter order ID to process:");
-        Long orderId = readLong();
-        if (orderId == null) return;
-        out.println("Estimated delivery time (minutes):");
-        int minutes;
-        try { minutes = Integer.parseInt(in.readLine().trim()); }
-        catch (NumberFormatException e) { out.println("Invalid time."); return; }
-        try {
-            services.getOrderService().processOrder(orderId, employee.getId(), minutes);
-            out.println("Order #" + orderId + " is now PROCESSING. ETA: " + minutes + " minutes.");
-        } catch (Exception e) {
-            out.println("Error: " + e.getMessage());
-        }
-    }
-
-    private void handleDeliverOrder() throws IOException {
-        // show processing orders so employee knows which ones are ready to deliver
-        List<Order> processing = services.getOrderService().getProcessingOrders();
-        if (processing.isEmpty()) { out.println("\nNo orders currently being processed."); return; }
-        out.println("\nPROCESSING ORDERS:");
-        processing.forEach(o -> { out.println(o); out.println("---"); });
-
-        out.println("Enter order ID to mark as delivered:");
-        Long orderId = readLong();
-        if (orderId == null) return;
-
-        try {
-            services.getOrderService().deliverOrder(orderId);
-            out.println("Order #" + orderId + " marked as DELIVERED.");
-            out.println("Payment has been marked as COMPLETED.");
-        } catch (Exception e) {
-            out.println("Error: " + e.getMessage());
-        }
-    }
-
-    private void handleViewLowStock() {
-        List<Ingredient> low = services.getIngredientService().getLowStockIngredients();
-        if (low.isEmpty()) { out.println("\nAll ingredients sufficiently stocked."); return; }
-        out.println("\nLOW STOCK ALERT:");
-        low.forEach(i -> out.println(i));
-    }
-
-    // ── Manager ────────────────────────────────────────────────────────────
-
-    private void handleViewPendingEmployees() {
-        List<User> pending = services.getEmployeeService().getPendingEmployees();
-        if (pending.isEmpty()) { out.println("\nNo pending employees."); return; }
-        out.println("\nPENDING EMPLOYEES:");
-        pending.forEach(u -> out.println(String.format("[%d] %s — %s", u.getId(), u.getFullName(), u.getEmail())));
-    }
-
-    private void handleApproveEmployee() throws IOException {
-        out.println("\nAPPROVE EMPLOYEE:");
-        handleViewPendingEmployees();
-        out.println("Enter employee user ID:");
-        Long userId = readLong();
-        if (userId == null) return;
-        out.println("Enter salary:");
-        BigDecimal salary = readBigDecimal();
-        if (salary == null) return;
-        LocalDate hireDate = readValidatedDate("Hire date (YYYY-MM-DD):");
-        try {
-            EmployeeDetails details = services.getEmployeeService().approveEmployee(userId, salary, hireDate);
-            out.println("Employee approved! " + details);
-        } catch (Exception e) { out.println("Error: " + e.getMessage()); }
-    }
-
-    private void handleFireEmployee() throws IOException {
-        out.println("\nFIRE EMPLOYEE:");
-        List<User> active = services.getEmployeeService().getActiveEmployees();
-        if (active.isEmpty()) { out.println("No active employees."); return; }
-        out.println("ACTIVE EMPLOYEES:");
-        active.forEach(u -> out.println(String.format("[%d] %s — %s", u.getId(), u.getFullName(), u.getEmail())));
-
-        out.println("Enter employee user ID:");
-        Long userId = readLong();
-        if (userId == null) return;
-
-        // show who is being fired before asking to confirm
-        services.getEmployeeService().findUser(userId).ifPresent(u ->
-                out.println("You are about to fire: " + u.getFullName() + " (" + u.getEmail() + ")"));
-
-        out.println("Are you sure? (yes/no):");
-        String confirm = in.readLine();
-        if (confirm != null && confirm.trim().equalsIgnoreCase("yes")) {
-            try { services.getEmployeeService().fireEmployee(userId); out.println("Employee terminated."); }
-            catch (Exception e) { out.println("Error: " + e.getMessage()); }
-        } else { out.println("Cancelled."); }
-    }
-
-    private void handleAssignShift() throws IOException {
-        out.println("\nASSIGN SHIFT:");
-        List<User> active = services.getEmployeeService().getActiveEmployees();
-        if (active.isEmpty()) { out.println("No active employees."); return; }
-        out.println("ACTIVE EMPLOYEES:");
-        active.forEach(u -> out.println(String.format("[%d] %s", u.getId(), u.getFullName())));
-
-        out.println("Enter employee user ID:");
-        Long employeeId = readLong();
-        if (employeeId == null) return;
-
-        // auto-lookup employee name — manager does not have to type it
-        String employeeName = services.getEmployeeService().findUser(employeeId)
-                .map(User::getFullName)
-                .orElse(null);
-        if (employeeName == null) { out.println("Employee not found."); return; }
-        out.println("Assigning shift to: " + employeeName);
-
-        LocalDate date      = readValidatedDate("Shift date (YYYY-MM-DD):");
-        LocalTime startTime = readValidatedTime("Start time (HH:MM):");
-        LocalTime endTime   = readValidatedTime("End time (HH:MM):");
-        try {
-            Shift shift = services.getEmployeeService().assignShift(employeeId, employeeName, date, startTime, endTime);
-            out.println("Shift assigned: " + shift);
-        } catch (Exception e) { out.println("Error: " + e.getMessage()); }
-    }
-
-    private void handleViewAllEmployees() {
-        List<User> active = services.getEmployeeService().getActiveEmployees();
-        if (active.isEmpty()) { out.println("\nNo active employees."); return; }
-        out.println("\nALL ACTIVE EMPLOYEES:");
-        for (User u : active) {
-            services.getEmployeeService().getEmployeeDetails(u.getId()).ifPresentOrElse(
-                    d -> out.println(String.format("[%d] %s | Salary: %.2f EUR | Hired: %s",
-                            u.getId(), u.getFullName(), d.getSalary(), d.getHireDate())),
-                    () -> out.println(String.format("[%d] %s | No details on file", u.getId(), u.getFullName()))
-            );
-        }
-    }
-
-    private void handleRemoveShift() throws IOException {
-        out.println("\nREMOVE SHIFT:");
-        List<User> active = services.getEmployeeService().getActiveEmployees();
-        if (active.isEmpty()) { out.println("No active employees."); return; }
-        out.println("EMPLOYEES:");
-        active.forEach(u -> out.println(String.format("[%d] %s", u.getId(), u.getFullName())));
-
-        out.println("Enter employee user ID:");
-        Long employeeId = readLong();
-        if (employeeId == null) return;
-
-        List<objects.Shift> shifts = services.getEmployeeService().getShiftsForEmployee(employeeId);
-        if (shifts.isEmpty()) { out.println("No shifts found for this employee."); return; }
-        out.println("SHIFTS:");
-        shifts.forEach(s -> out.println(String.format("[%d] %s", s.getId(), s)));
-
-        out.println("Enter shift ID to remove:");
-        Long shiftId = readLong();
-        if (shiftId == null) return;
-
-        try {
-            services.getEmployeeService().removeShift(shiftId);
-            out.println("Shift removed.");
-        } catch (Exception e) { out.println("Error: " + e.getMessage()); }
-    }
-
-    private void handleViewTodaysShifts() {
-        List<Shift> shifts = services.getEmployeeService().getTodaysShifts();
-        if (shifts.isEmpty()) { out.println("\nNo shifts today."); return; }
-        out.println("\nTODAY'S SHIFTS:");
-        shifts.forEach(s -> out.println(s));
-    }
-
-    private void handleUpdateSalary() throws IOException {
-        out.println("\nUPDATE SALARY:");
-        List<User> active = services.getEmployeeService().getActiveEmployees();
-        if (active.isEmpty()) { out.println("No active employees."); return; }
-        out.println("ACTIVE EMPLOYEES:");
-        active.forEach(u -> out.println(String.format("[%d] %s", u.getId(), u.getFullName())));
-
-        out.println("Enter employee user ID:");
-        Long userId = readLong();
-        if (userId == null) return;
-
-        // show current salary so manager knows what they are changing from
-        services.getEmployeeService().getEmployeeDetails(userId).ifPresent(d ->
-                out.println(String.format("Current salary: %.2f EUR", d.getSalary())));
-
-        out.println("New salary:");
-        BigDecimal salary = readBigDecimal();
-        if (salary == null) return;
-        try {
-            services.getEmployeeService().updateSalary(userId, salary);
-            out.println(String.format("Salary updated to %.2f EUR.", salary));
-        } catch (Exception e) { out.println("Error: " + e.getMessage()); }
-    }
-
-    private void handleManageProducts() throws IOException {
-        out.println("\nMANAGE PRODUCTS:");
-        out.println("1 - Add product");
-        out.println("2 - Deactivate product");
-        out.println("0 - Back");
-        out.println("Choose:");
-        String choice = in.readLine();
-        if (choice == null) return;
-        switch (choice.trim()) {
-            case "1" -> {
-                List<Category> cats = services.getProductService().getCategories();
-                for (int i = 0; i < cats.size(); i++) out.println((i + 1) + " - " + cats.get(i).getName());
-                out.println("Choose category:");
-                int catIdx;
-                try { catIdx = Integer.parseInt(in.readLine().trim()) - 1; }
-                catch (NumberFormatException e) { out.println("Invalid."); return; }
-                if (catIdx < 0 || catIdx >= cats.size()) { out.println("Invalid."); return; }
-                out.println("Product name:");
-                String name = in.readLine();
-                out.println("Description (Enter to skip):");
-                String desc = in.readLine();
-                if (desc != null && desc.isBlank()) desc = null;
-                out.println("Price:");
-                BigDecimal price = readBigDecimal();
-                if (price == null) return;
-                try {
-                    Product p = services.getProductService().addProduct(name, desc, price, cats.get(catIdx).getId());
-                    out.println("Product added: " + p);
-                } catch (Exception e) { out.println("Error: " + e.getMessage()); }
-            }
-            case "2" -> {
-                List<Product> activeProducts = services.getProductService().getAllActiveProducts();
-                if (activeProducts.isEmpty()) { out.println("No active products."); return; }
-                out.println("ACTIVE PRODUCTS:");
-                activeProducts.forEach(p -> out.println(String.format("[%d] %s — %.2f EUR", p.getId(), p.getName(), p.getPrice())));
-                out.println("Enter product ID to deactivate:");
-                Long pid = readLong();
-                if (pid == null) return;
-                try { services.getProductService().deactivateProduct(pid); out.println("Product deactivated."); }
-                catch (Exception e) { out.println("Error: " + e.getMessage()); }
-            }
-        }
-    }
-
-    private void handleManageStock() throws IOException {
-        out.println("\nMANAGE STOCK:");
-        out.println("1 - View all ingredients");
-        out.println("2 - Restock ingredient");
-        out.println("3 - Set minimum stock");
-        out.println("0 - Back");
-        out.println("Choose:");
-        String choice = in.readLine();
-        if (choice == null) return;
-        switch (choice.trim()) {
-            case "1" -> {
-                List<Ingredient> all = services.getIngredientService().getAllIngredients();
-                if (all.isEmpty()) out.println("No ingredients.");
-                else all.forEach(i -> out.println(i));
-            }
-            case "2" -> {
-                List<Ingredient> allIngredients = services.getIngredientService().getAllIngredients();
-                if (allIngredients.isEmpty()) { out.println("No ingredients found."); return; }
-                out.println("\nINGREDIENTS:");
-                allIngredients.forEach(i -> out.println(i));
-                out.println("\nEnter ingredient ID to restock:");
-                Long id = readLong();
-                if (id == null) return;
-                out.println("Amount to add:");
-                BigDecimal amount = readBigDecimal();
-                if (amount == null) return;
-                try {
-                    services.getIngredientService().restock(id, amount);
-                    out.println("Restocked successfully. Products with all ingredients available have been reactivated.");
-                } catch (Exception e) { out.println("Error: " + e.getMessage()); }
-            }
-            case "3" -> {
-                List<Ingredient> allIngredients2 = services.getIngredientService().getAllIngredients();
-                if (allIngredients2.isEmpty()) { out.println("No ingredients found."); return; }
-                out.println("\nINGREDIENTS:");
-                allIngredients2.forEach(i -> out.println(i));
-                out.println("\nEnter ingredient ID:");
-                Long id = readLong();
-                if (id == null) return;
-                out.println("New minimum stock level:");
-                BigDecimal min = readBigDecimal();
-                if (min == null) return;
-                try { services.getIngredientService().setMinimumStock(id, min); out.println("Minimum stock updated."); }
-                catch (Exception e) { out.println("Error: " + e.getMessage()); }
-            }
-        }
-    }
-
-    private void handleViewAllOrders() throws IOException {
-        List<Order> orders = services.getOrderService().getPendingOrders();
-        if (orders.isEmpty()) { out.println("\nNo pending orders."); return; }
-        out.println("\nPENDING ORDERS:");
-        orders.forEach(o -> { out.println(o); out.println("---"); });
-        out.println("\n1 - Mark as delivered");
-        out.println("2 - Cancel order");
-        out.println("0 - Back");
-        out.println("Choose:");
-        String choice = in.readLine();
-        if (choice == null || choice.trim().equals("0")) return;
-        out.println("Order ID:");
-        Long orderId = readLong();
-        if (orderId == null) return;
-        try {
-            if ("1".equals(choice.trim())) {
-                services.getOrderService().deliverOrder(orderId);
-                out.println("Order #" + orderId + " marked as DELIVERED.");
-            } else if ("2".equals(choice.trim())) {
-                services.getOrderService().cancelOrder(orderId);
-                out.println("Order #" + orderId + " CANCELLED.");
-            }
-        } catch (Exception e) { out.println("Error: " + e.getMessage()); }
-    }
-
-    // ── Input helpers ──────────────────────────────────────────────────────
-
-    private String readInput(String prompt) throws IOException {
-        out.println(prompt);
-        return in.readLine();
-    }
-
-    private String readValidatedInput(String prompt, Consumer<String> validator) throws IOException {
-        while (true) {
-            String input = readInput(prompt);
-            if (input == null) throw new IOException("Client disconnected");
-            try { validator.accept(input); return input; }
-            catch (IllegalArgumentException e) { out.println("Error: " + e.getMessage() + " Try again."); }
-        }
-    }
-
-    private LocalDate readValidatedDate(String prompt) throws IOException {
-        while (true) {
-            out.println(prompt);
-            String input = in.readLine();
-            if (input == null) throw new IOException("Client disconnected");
-            try { return LocalDate.parse(input.trim(), DateTimeFormatter.ISO_LOCAL_DATE); }
-            catch (DateTimeParseException e) { out.println("Invalid date. Use YYYY-MM-DD. Try again."); }
-        }
-    }
-
-    private LocalTime readValidatedTime(String prompt) throws IOException {
-        while (true) {
-            out.println(prompt);
-            String input = in.readLine();
-            if (input == null) throw new IOException("Client disconnected");
-            try { return LocalTime.parse(input.trim(), DateTimeFormatter.ofPattern("HH:mm")); }
-            catch (DateTimeParseException e) { out.println("Invalid time. Use HH:MM. Try again."); }
-        }
-    }
-
-    private Role readValidatedRole() throws IOException {
-        while (true) {
-            out.println("Role:\n  1. Customer\n  2. Employee\nChoose:");
-            String choice = in.readLine();
-            if (choice == null) throw new IOException("Client disconnected");
-            switch (choice.trim()) {
-                case "1" -> { return Role.CUSTOMER; }
-                case "2" -> { return Role.EMPLOYEE; }
-                default  -> out.println("Invalid. Enter 1 or 2.");
-            }
-        }
-    }
-
-    private Long readLong() throws IOException {
-        String input = in.readLine();
-        try { return Long.parseLong(input.trim()); }
-        catch (NumberFormatException e) { out.println("Invalid ID."); return null; }
-    }
-
-    private BigDecimal readBigDecimal() throws IOException {
-        String input = in.readLine();
-        try { return new BigDecimal(input.trim()); }
-        catch (NumberFormatException e) { out.println("Invalid number."); return null; }
-    }
-
-    private void closeConnection() {
-        try {
-            if (in != null)           in.close();
-            if (out != null)          out.close();
-            if (clientSocket != null) clientSocket.close();
-        } catch (IOException e) {
-            System.out.println("Error closing connection: " + e.getMessage());
-        }
+    private static Map<String, Command> buildManagerCommands() {
+        Map<String, Command> m = new LinkedHashMap<>();
+        m.put("1", new ViewPendingEmployeesCommand());
+        m.put("2", new ApproveEmployeeCommand());
+        m.put("3", new FireEmployeeCommand());
+        m.put("4", new ViewAllEmployeesCommand());
+        m.put("5", new AssignShiftCommand());
+        m.put("6", new RemoveShiftCommand());
+        m.put("7", new ViewTodaysShiftsCommand());
+        m.put("8", new UpdateSalaryCommand());
+        m.put("9", new ManageProductsCommand());
+        m.put("10", new ManageStockCommand());
+        m.put("11", new ViewAllOrdersCommand());
+        m.put("12", new LogOutCommand());
+        return m;
     }
 }
